@@ -15,7 +15,7 @@
     "words:check": "tsx scripts/check-words.ts"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -24,15 +24,19 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vitest": "^5.0.2",
     "word-list": "^4.1.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "express": "^5.2.1",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.5"
   }
 }

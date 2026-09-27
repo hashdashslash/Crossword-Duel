@@ -17,6 +17,42 @@ export const CONFIG = {
   reconnectWindowSeconds: 60,
   maxSolveMinutes: 30,
 
+  /** Seconds a player may read the clue-writing rules before their first word starts anyway. */
+  writingIntroSeconds: 20,
+  /** Live clue check: give up (and skip the warning) after this long. */
+  liveCheckTimeoutMs: 2500,
+  /** Full clue review: give up (use original clues, no penalties) after this long. */
+  reviewTimeoutMs: 15000,
+  /** Hint generation: give up (no charge) after this long. */
+  hintTimeoutMs: 12000,
+  /** The "Building your puzzles…" screen shows for at least this long. */
+  minBuildingScreenMs: 2500,
+
+  // ── AI ────────────────────────────────────────────────────
+  ai: {
+    /** Fast model for the live clue warning (needs ~1–2 s). */
+    quickCheckModel: 'claude-haiku-4-5',
+    /** Model for the full clue review that decides penalties. */
+    reviewModel: 'claude-opus-5',
+    /** Model for hint clues and replacement clues. */
+    hintModel: 'claude-opus-5',
+    /**
+     * How strict the clue review is. 'lenient' follows the game rules: flag only
+     * unconnected or factually wrong clues, and allow when in doubt.
+     * 'strict' is reserved for a future strict mode.
+     */
+    reviewStrictness: 'lenient' as 'lenient' | 'strict',
+  },
+
+  // ── Test-mode bot ─────────────────────────────────────────
+  bot: {
+    /** Seconds the bot takes per clue while writing (random in this range). */
+    writeSecondsMin: 1,
+    writeSecondsMax: 2.5,
+    /** Seconds per word the bot takes while solving, by speed setting. */
+    solveSecondsPerWord: { fast: 4, normal: 25, slow: 70 },
+  },
+
   // ── Player names ──────────────────────────────────────────
   nameMinLength: 1,
   nameMaxLength: 20,
@@ -69,3 +105,6 @@ export const CONFIG = {
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
+
+export type BotSpeed = 'fast' | 'normal' | 'slow';
+export const BOT_SPEEDS: readonly BotSpeed[] = ['fast', 'normal', 'slow'];

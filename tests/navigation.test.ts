@@ -93,9 +93,15 @@ describe('navigation', () => {
     const locked = buildBoard({ ...puzzle, clues: puzzle.clues.map((c, i) => (i === 1 ? { ...c, prefilled: 'COW' } : c)) });
     const e = emptyEntries(locked);
     expect(e[1]![0]).toBe('O');
-    const typed = typeLetter(locked, e, at(0, 0), 'x');
-    expect(typed.entries[0]![0]).toBe('C');
-    expect(typed.cursor).toEqual(at(0, 1));
+    // Typing the locked square's own letter steps over it.
+    const same = typeLetter(locked, e, at(0, 0), 'c');
+    expect(same.entries[0]![0]).toBe('C');
+    expect(same.cursor).toEqual(at(0, 1));
+    // Typing a different letter goes into the next open square.
+    const other = typeLetter(locked, e, at(0, 0), 'a');
+    expect(other.entries[0]![0]).toBe('C');
+    expect(other.entries[0]![1]).toBe('A');
+    expect(other.cursor).toEqual(at(0, 2));
     expect(backspace(locked, e, at(0, 1)).cursor).toEqual(at(0, 1));
   });
 });

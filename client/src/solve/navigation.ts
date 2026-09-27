@@ -109,19 +109,32 @@ export function nextWord(board: Board, entries: Entries, cur: Cursor, step: 1 | 
   return jumpToClue(board, entries, board.order[nextPos]!);
 }
 
-/** Types a letter at the cursor and advances within the current word. */
+/**
+ * Types a letter at the cursor and advances within the current word.
+ * Pre-filled (locked) squares can't change: typing their own letter just steps
+ * over them (so typing the whole word works), while typing a different letter
+ * places it in the next open square (so typing only the missing letters works).
+ */
 export function typeLetter(board: Board, entries: Entries, cur: Cursor, letter: string): { entries: Entries; cursor: Cursor } {
-  let next = entries;
-  if (!board.locked[cur.row]![cur.col]) {
-    next = entries.map((row) => [...row]);
-    next[cur.row]![cur.col] = letter.toUpperCase();
-  }
+  const ch = letter.toUpperCase();
   const idx = activeClueIndex(board, cur);
-  if (idx === undefined) return { entries: next, cursor: cur };
-  const cells = clueCells(board.clues[idx]!);
-  const here = cells.findIndex(([r, c]) => r === cur.row && c === cur.col);
-  const after = cells.slice(here + 1).find(([r, c]) => !board.locked[r]![c]);
-  return { entries: next, cursor: after ? { ...cur, row: after[0], col: after[1] } : cur };
+  const cells = idx === undefined ? [[cur.row, cur.col] as CellPos] : clueCells(board.clues[idx]!);
+  let here = cells.findIndex(([r, c]) => r === cur.row && c === cur.col);
+  let next = entries;
+
+  if (board.locked[cur.row]![cur.col] && entries[cur.row]![cur.col] !== ch) {
+    const open = cells.findIndex(([r, c], i) => i > here && !board.locked[r]![c]);
+    if (open === -1) return { entries, cursor: cur };
+    here = open;
+  }
+  const [tr, tc] = cells[here]!;
+  if (!board.locked[tr]![tc]) {
+    next = entries.map((row) => [...row]);
+    next[tr]![tc] = ch;
+  }
+  const after = cells[here + 1];
+  const target = after ?? cells[here]!;
+  return { entries: next, cursor: { ...cur, row: target[0], col: target[1] } };
 }
 
 /**

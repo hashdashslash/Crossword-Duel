@@ -1,0 +1,14 @@
+# One-click hosting on Render (https://render.com). See README → "Put it online".
+services:
+  - type: web
+    name: crossword-duel
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/config
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false # you paste the key into Render's dashboard; it is never stored in GitHub
+      - key: DEV_TOOLS
+        value: "1"

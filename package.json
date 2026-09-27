@@ -1,0 +1,24 @@
+{
+  "name": "crossword-duel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Two-player real-time competitive crossword game.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "grid:stress": "tsx scripts/grid-stress-test.ts",
+    "grid:demo": "tsx scripts/grid-demo.ts",
+    "words:check": "tsx scripts/check-words.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2",
+    "word-list": "^4.1.0"
+  }
+}

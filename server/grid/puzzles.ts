@@ -6,7 +6,7 @@ import { CONFIG, type Difficulty } from '../../shared/config.js';
 import { loadWordBank, drawUnrelated, type WordBank } from '../words/wordBank.js';
 import { buildValidGrids, type ScoredGrid } from './generator.js';
 import { createRng, randomSeed, type Rng } from './rng.js';
-import type { GamePuzzles } from './types.js';
+import type { GamePuzzles, Grid } from './types.js';
 import { validatePair } from './validate.js';
 
 export interface GenerateResult extends GamePuzzles {
@@ -66,4 +66,16 @@ export function generateGamePuzzles(
     return { gridA: pair[0].grid, gridB: pair[1].grid, seed, redraws: redraw, elapsedMs: Date.now() - started };
   }
   throw new GridGenerationError(`Could not build balanced ${difficulty} grids (seed ${seed})`);
+}
+
+/** Builds one stand-alone grid (used for single-player practice). */
+export function generateSingleGrid(difficulty: Difficulty, options: { seed?: number; bank?: WordBank } = {}): Grid {
+  const seed = options.seed ?? randomSeed();
+  const rng = createRng(seed);
+  const words = (options.bank ?? loadWordBank())[difficulty];
+  for (let redraw = 0; redraw < CONFIG.grid.maxWordRedraws; redraw++) {
+    const grids = buildValidGrids(drawUnrelated(words, CONFIG.candidatePoolPerGrid, rng), rng);
+    if (grids.length) return grids[0]!.grid;
+  }
+  throw new GridGenerationError(`Could not build a ${difficulty} grid (seed ${seed})`);
 }

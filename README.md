@@ -4,8 +4,8 @@ A two-player, real-time competitive crossword game. Each player writes clues for
 secret set of 15 words, then the players swap and race to solve each other's puzzle.
 Lowest final time wins.
 
-> **Status: Phase 1 of 7 — word bank and grid generator.** There is no playable game yet.
-> This phase builds and tests the part that creates crossword grids.
+> **Status: Phase 2 of 7 — single-player solving screen.** You can solve practice puzzles in
+> your browser. Clues are placeholder "unscramble" clues until clue writing arrives in Phase 3.
 
 ---
 
@@ -30,7 +30,45 @@ You only do these steps once.
 
 ---
 
-## Phase 1: what you can try
+## Play the practice puzzle (Phase 2)
+
+1. In the terminal, in the project folder, type:
+
+   ```
+   npm run dev
+   ```
+
+2. Wait until you see `Local: http://localhost:5173/` and `Server running`.
+3. Open **http://localhost:5173** in your web browser.
+4. To stop the game, click the terminal and press **Ctrl + C**.
+
+**Try it on your phone:** your phone must be on the same Wi-Fi as your computer. The terminal
+also shows a line like `Network: http://192.168.1.23:5173/` — type that address into your
+phone's browser. (Windows may ask whether to allow Node.js through the firewall: click **Allow**
+for private networks.)
+
+**See the phone layout on a computer:** open **http://localhost:5173/?touch=1**.
+
+### Controls
+
+| On a computer | |
+|---|---|
+| Click a square | Select it |
+| Click the same square again | Switch between Across and Down |
+| Type a letter | Fill the square and move to the next one |
+| Backspace | Clear the square (or step back if it's already empty) |
+| Arrow keys | Move around (the first press across the word turns direction) |
+| Tab / Shift + Tab | Next / previous word |
+| Space bar | Switch between Across and Down |
+| Click a clue | Jump to that word |
+
+On a phone, tap squares and use the on-screen keyboard. Tap the blue clue bar to switch
+direction, its ‹ › arrows to move between words, and **Clues** to see the full list.
+
+**Submit** checks the grid: empty squares turn light blue, wrong letters turn a stronger
+blue (both get a small blue corner marker). Fix them and submit again — there's no penalty.
+
+## Grid generator tools (Phase 1)
 
 Type any of these commands in the terminal, from the project folder.
 
@@ -141,8 +179,12 @@ The generator is ordinary code, not AI. For each game it:
 
 ```
 shared/config.ts         every tunable number
+shared/puzzle.ts         what the browser is told about a puzzle (never the answers)
+server/index.ts          the game server
 server/words/            word lists + loader
 server/grid/             generator, independent validator, clue numbering
+server/solve/            answer checking
+client/                  the web pages (React)
 scripts/                 demo, stress test, word-list checker
 tests/                   automated tests
 ```

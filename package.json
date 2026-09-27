@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Two-player real-time competitive crossword game.",
   "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,gray \"tsx watch server/index.ts\" \"vite\"",
+    "build": "vite build",
+    "start": "tsx server/index.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "grid:stress": "tsx scripts/grid-stress-test.ts",
@@ -15,10 +18,21 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
+    "vite": "^8.3.1",
     "vitest": "^5.0.2",
     "word-list": "^4.1.0"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   }
 }

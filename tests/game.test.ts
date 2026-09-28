@@ -178,6 +178,10 @@ describe('full game', () => {
     expect(ra!.finalMs).toBe(ra!.rawMs! + 30_000 + 60_000);
     expect(rb!.finalMs).toBe(rb!.rawMs);
     expect(result.grids.length).toBe(2);
+    // Each board shows what its solver entered (both solved everything correctly here).
+    for (const g of result.grids) {
+      expect(g.entries).toEqual(g.cells.map((row) => row.map((cell) => cell ?? '')));
+    }
     expect(result.grids[0]!.clues.some((c) => c.prefilled)).toBe(true);
 
     // Rematch sends both back to the lobby, not ready.
@@ -190,6 +194,8 @@ describe('full game', () => {
     const { a, b } = await startGame();
     b.emit('solve:resign');
     await until(() => a.view?.phase === 'finished');
+    // Nobody solved anything, so both boards come back empty.
+    expect(a.view!.result!.grids.every((g) => g.entries.flat().every((l) => l === ''))).toBe(true);
     expect(a.view!.result!.reason).toBe('resign');
     expect(a.view!.result!.winnerId).toBe(a.view!.you);
   });

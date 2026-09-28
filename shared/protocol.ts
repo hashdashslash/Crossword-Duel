@@ -97,7 +97,10 @@ export interface RevealGrid {
   solverName: string;
   rows: number;
   cols: number;
+  /** The correct letters (null = black square). */
   cells: (string | null)[][];
+  /** What the solver had entered when the game ended ('' = empty square). */
+  entries: string[][];
   clues: RevealClue[];
 }
 

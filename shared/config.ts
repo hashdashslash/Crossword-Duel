@@ -36,6 +36,11 @@ export const CONFIG = {
     reviewModel: 'claude-opus-5',
     /** Model for hint clues and replacement clues. */
     hintModel: 'claude-opus-5',
+    /** If the main model errors or is slow, the request is retried once on this faster model. */
+    fallbackModel: 'claude-haiku-4-5',
+    /** How long the main model gets before switching to the fallback model (ms). */
+    reviewPrimaryMs: 10000,
+    hintPrimaryMs: 7000,
     /**
      * How strict the clue review is. 'lenient' follows the game rules: flag only
      * unconnected or factually wrong clues, and allow when in doubt.

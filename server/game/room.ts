@@ -642,6 +642,7 @@ export class Room {
         rows: grid.rows,
         cols: grid.cols,
         cells: grid.cells,
+        entries: solver.solving?.entries ?? grid.cells.map((row) => row.map(() => '')),
         clues: grid.words.map((w, i) => {
           const fc = this.finalClues[g]?.[i];
           const slot = writer.writing?.slots.find((s) => s.gridIndex === i);

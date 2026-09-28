@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { CONFIG } from '../../../shared/config';
-import type { GameResult, GameView, PlayerResult, RevealGrid } from '../../../shared/protocol';
+import type { GameResult, GameView, PlayerResult, RevealClue, RevealGrid } from '../../../shared/protocol';
 import { MuteButton } from '../components/ui';
 import { sfx } from '../lib/sound';
 import { formatTime } from '../solve/Timer';
@@ -222,34 +222,68 @@ function GridsView({ grids, onBack }: { grids: RevealGrid[]; onBack: () => void 
 function SolvedGrid({ grid }: { grid: RevealGrid }) {
   const numbers = new Map(grid.clues.map((c) => [`${c.row},${c.col}`, c.number]));
   const byDir = (dir: 'across' | 'down') => grid.clues.filter((c) => c.direction === dir).sort((a, b) => a.number - b.number);
+  const entered = (r: number, c: number) => grid.entries[r]?.[c] ?? '';
+  const cellsOf = (c: RevealClue) =>
+    Array.from({ length: c.answer.length }, (_, i) => (c.direction === 'across' ? [c.row, c.col + i] : [c.row + i, c.col]) as [number, number]);
+  const wordsRight = grid.clues.filter((c) => cellsOf(c).every(([r, col], i) => entered(r, col) === c.answer[i])).length;
+
   return (
     <section className="solved-grid">
-      <h2>Clues by {grid.writerName} <span className="muted">· solved by {grid.solverName}</span></h2>
+      <h2>{grid.solverName}'s board <span className="muted">· clues by {grid.writerName}</span></h2>
+      <p className="board-score">{wordsRight} of {grid.clues.length} words right</p>
       <div className="mini-grid" style={{ gridTemplateColumns: `repeat(${grid.cols}, 1fr)`, aspectRatio: `${grid.cols} / ${grid.rows}` }}>
-        {grid.cells.map((row, r) => row.map((cell, c) => (
-          <div key={`${r},${c}`} className={`mcell ${cell === null ? 'black' : ''}`}>
-            {numbers.has(`${r},${c}`) && <span className="num">{numbers.get(`${r},${c}`)}</span>}
-            {cell}
-          </div>
-        )))}
+        {grid.cells.map((row, r) => row.map((answer, c) => {
+          if (answer === null) return <div key={`${r},${c}`} className="mcell black" />;
+          const letter = entered(r, c);
+          const state = !letter ? 'empty' : letter === answer ? '' : 'wrong';
+          return (
+            <div key={`${r},${c}`} className={`mcell ${state}`} title={state === 'wrong' ? `Entered ${letter}, answer ${answer}` : undefined}>
+              {numbers.has(`${r},${c}`) && <span className="num">{numbers.get(`${r},${c}`)}</span>}
+              {letter}
+            </div>
+          );
+        }))}
+      </div>
+      <div className="board-legend">
+        <span><i className="swatch wrong" /> Wrong letter</span>
+        <span><i className="swatch empty" /> Left empty</span>
       </div>
       {(['across', 'down'] as const).map((dir) => (
         <div key={dir} className="answer-list">
           <h3>{dir === 'across' ? 'Across' : 'Down'}</h3>
           <ol>
-            {byDir(dir).map((c) => (
-              <li key={`${dir}${c.number}`}>
-                <span className="clue-num">{c.number}</span>
-                <span className="clue-body">
-                  <span className="answer">{c.answer}</span>{' '}
-                  <span className={c.prefilled ? 'muted' : ''}>{c.text}</span>
-                  {c.original !== undefined && (
-                    <span className="replaced">Replaced — original: <s>{c.original}</s>{c.explanation ? ` (${c.explanation})` : ''}</span>
-                  )}
-                  {c.hint && <span className="hint-text">Hint used: {c.hint}</span>}
-                </span>
-              </li>
-            ))}
+            {byDir(dir).map((c) => {
+              const letters = cellsOf(c).map(([r, col]) => entered(r, col));
+              const right = letters.every((l, i) => l === c.answer[i]);
+              return (
+                <li key={`${dir}${c.number}`} className={right ? 'right' : 'missed'}>
+                  <span className="clue-num">{c.number}</span>
+                  <span className="clue-body">
+                    <span className={c.prefilled ? 'muted' : ''}>{c.text}</span>
+                    <span className="word-check">
+                      {right ? (
+                        <><span className="mark" aria-label="Correct">✓</span> <span className="answer">{c.answer}</span></>
+                      ) : (
+                        <>
+                          <span className="mark" aria-label="Not correct">✗</span>{' '}
+                          <span className="entered" aria-label={`Entered ${letters.map((l) => l || 'blank').join(' ')}`}>
+                            {letters.map((l, i) => (
+                              <span key={i} className={!l ? 'blank' : l === c.answer[i] ? '' : 'bad'}>{l || '·'}</span>
+                            ))}
+                          </span>
+                          <span className="muted"> → answer </span>
+                          <span className="answer">{c.answer}</span>
+                        </>
+                      )}
+                    </span>
+                    {c.original !== undefined && (
+                      <span className="replaced">Replaced — original: <s>{c.original}</s>{c.explanation ? ` (${c.explanation})` : ''}</span>
+                    )}
+                    {c.hint && <span className="hint-text">Hint used: {c.hint}</span>}
+                  </span>
+                </li>
+              );
+            })}
           </ol>
         </div>
       ))}

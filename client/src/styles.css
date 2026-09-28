@@ -427,3 +427,20 @@ h1, h2 { margin: 0; }
   .writing-main { justify-content: flex-start; padding-top: 8px; gap: 12px; }
   .writing-main > .muted { margin: -6px 0 0; }
 }
+
+/* End-of-game boards: what each solver actually entered. */
+.board-score { margin: -6px 0 12px; font-weight: 600; color: var(--blue-strong); }
+.mcell.wrong { background: var(--blue-err-wrong); color: var(--ink); }
+.mcell.empty { background: var(--blue-err-blank); }
+.board-legend { display: flex; justify-content: center; gap: 16px; font-size: 0.8rem; color: var(--muted); margin: -8px 0 8px; }
+.board-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--grid-line); }
+.swatch.wrong { background: var(--blue-err-wrong); }
+.swatch.empty { background: var(--blue-err-blank); }
+.word-check { font-size: 0.88rem; }
+.word-check .mark { font-weight: 800; }
+.answer-list li.right .mark { color: var(--blue); }
+.answer-list li.missed .mark { color: var(--ink); }
+.entered { font-weight: 700; letter-spacing: 0.05em; }
+.entered .bad { color: var(--blue-strong); text-decoration: underline; text-decoration-thickness: 2px; }
+.entered .blank { color: var(--muted); }

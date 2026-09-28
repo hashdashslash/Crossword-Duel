@@ -6,6 +6,7 @@ import type { ClientToServerEvents, Err, ServerToClientEvents } from '../../shar
 import { validateName } from '../../shared/rules.js';
 import type { ClueAI } from '../ai/types.js';
 import type { Accounts } from '../accounts/accounts.js';
+import type { FinishedGame } from '../history.js';
 import type { PublicUser } from '../../shared/account.js';
 import { Room, type Player } from './room.js';
 
@@ -14,7 +15,7 @@ type Sock = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O (easily confused)
 
-export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts | null }) {
+export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts | null; onFinished?: (g: FinishedGame) => void }) {
   const rooms = new Map<string, Room>();
 
   const newCode = () => {
@@ -28,6 +29,7 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts
     const code = newCode();
     const room = new Room(code, difficulty, {
       ai: opts.ai,
+      onFinished: opts.onFinished,
       send: (player: Player, view) => {
         for (const id of player.sockets) io.to(id).emit('state', view);
       },
@@ -84,7 +86,7 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts
       if (!name.ok) return ack(fail(name.error));
       const difficulty = DIFFICULTIES.includes(p?.difficulty) ? p.difficulty : 'medium';
       const r = createRoom(difficulty);
-      const me = r.addPlayer(name.name, user?.id);
+      const me = r.addPlayer(name.name, user ?? undefined);
       ack({ ok: true, code: r.code, token: me.token });
       bind(r, me);
     });
@@ -97,7 +99,7 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts
       if (user && r.players.some((x) => x.userId === user.id && !x.left)) return ack(fail("You're already in this game on another tab or device."));
       const name = validateName(user?.username ?? p?.name);
       if (!name.ok) return ack(fail(name.error));
-      const me = r.addPlayer(name.name, user?.id);
+      const me = r.addPlayer(name.name, user ?? undefined);
       ack({ ok: true, token: me.token });
       bind(r, me);
     });

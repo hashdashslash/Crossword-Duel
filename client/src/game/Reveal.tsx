@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { CONFIG } from '../../../shared/config';
 import type { BestClueVote, GameResult, GameView, PlayerResult, RevealClue, RevealGrid } from '../../../shared/protocol';
 import { MuteButton } from '../components/ui';
-import { describeRecord, recordFor } from '../lib/record';
+import { describeRecord, useHeadToHead } from '../lib/record';
 import { sfx } from '../lib/sound';
 import { formatTime } from '../solve/Timer';
 
@@ -138,7 +138,7 @@ export function Reveal({ result, view, onRematch, onHome, onVote }: Props) {
         </div>
       )}
 
-      {step >= 5 && <HeadToHead result={result} you={view.you} />}
+      {step >= 5 && <HeadToHead result={result} view={view} />}
 
       {step >= 5 && result.grids.length === 2 && (
         <BestClue result={result} you={view.you} votes={votes} canVote={canVote} onVote={onVote} />
@@ -161,9 +161,10 @@ export function Reveal({ result, view, onRematch, onHome, onVote }: Props) {
 
 // ── Head-to-head record ─────────────────────────────────
 
-function HeadToHead({ result, you }: { result: GameResult; you: string }) {
-  const opp = result.players.find((p) => p.id !== you);
-  const record = opp ? recordFor(opp.name) : null;
+function HeadToHead({ result, view }: { result: GameResult; view: GameView }) {
+  const opp = result.players.find((p) => p.id !== view.you);
+  const live = view.players.find((p) => p.id === opp?.id);
+  const record = useHeadToHead(opp ? { name: opp.name, username: live?.username } : null, result.id);
   if (!record) return null;
   return <p className="head-to-head center muted">Your record vs {record.name}: <b>{describeRecord(record)}</b></p>;
 }
@@ -305,7 +306,7 @@ function Penalty({ ms, count, unit }: { ms: number; count: number; unit: string 
   );
 }
 
-function Final({ p, highlight }: { p: PlayerResult; highlight: boolean }) {
+export function Final({ p, highlight }: { p: PlayerResult; highlight: boolean }) {
   return <span className={`cell-val final ${highlight ? 'winner' : ''}`}>{p.finalMs !== null ? formatTime(p.finalMs) : 'DNF'}</span>;
 }
 
@@ -349,7 +350,7 @@ function GridsView({ grids, onBack }: { grids: RevealGrid[]; onBack: () => void 
   );
 }
 
-function SolvedGrid({ grid }: { grid: RevealGrid }) {
+export function SolvedGrid({ grid }: { grid: RevealGrid }) {
   const numbers = new Map(grid.clues.map((c) => [`${c.row},${c.col}`, c.number]));
   const byDir = (dir: 'across' | 'down') => grid.clues.filter((c) => c.direction === dir).sort((a, b) => a.number - b.number);
   const entered = (r: number, c: number) => grid.entries[r]?.[c] ?? '';

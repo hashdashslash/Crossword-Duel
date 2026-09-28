@@ -379,6 +379,9 @@ h1, h2 { margin: 0; }
 .reveal { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
 .reveal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .reveal-header h1 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; }
+.review-header .back-link { position: static; flex: none; }
+.review-header h1 { font-size: 1.3rem; text-align: center; flex: 1; }
+.review-header > span { width: 64px; flex: none; }
 .reveal-header-actions { display: flex; gap: 8px; }
 .reveal-reason { text-align: center; font-size: 1.2rem; color: var(--muted); margin: 32px 0 0; }
 .score-table { background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 8px 18px; }
@@ -555,3 +558,27 @@ h1, h2 { margin: 0; }
 /* ── Accounts ─────────────────────────────────────── */
 .account-bar { display: flex; justify-content: flex-end; align-items: center; gap: 14px; min-height: 24px; margin-bottom: 8px; font-size: 0.9rem; flex-wrap: wrap; }
 .account-bar .link { font-size: 0.9rem; }
+
+/* ── History and profile ──────────────────────────── */
+.wide-ish { max-width: 560px; }
+.game-list { gap: 0; padding: 8px; }
+.game-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: 0; border-radius: var(--radius); padding: 10px; color: var(--ink); }
+button.game-row:hover { background: var(--hover); }
+.game-row + .game-row { border-top: 1px solid var(--line); }
+.game-row-main { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.game-row-times { font-weight: 600; white-space: nowrap; }
+.outcome { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 999px; min-width: 48px; text-align: center; }
+.outcome.win { background: var(--blue); color: var(--on-accent); }
+.outcome.loss { background: var(--track); color: var(--ink); }
+.outcome.draw { background: var(--track-soft); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.profile-head { display: flex; align-items: center; gap: 14px; justify-content: center; margin: 8px 0 4px; }
+.avatar.big { width: 52px; height: 52px; font-size: 1.4rem; }
+.record-panel { flex-direction: row; justify-content: space-around; text-align: center; }
+.record-panel > div { display: flex; flex-direction: column; gap: 2px; }
+.record-num { font-size: 1.8rem; font-weight: 800; }
+.section-title { font-size: 1rem; margin: 24px 0 0; text-align: left; }
+.score-summary { max-width: 640px; margin: 16px auto; }
+.score-summary table { width: 100%; border-collapse: collapse; }
+.score-summary th, .score-summary td { padding: 6px 4px; text-align: right; font-size: 0.92rem; }
+.score-summary th:first-child { text-align: left; }
+.score-summary thead th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }

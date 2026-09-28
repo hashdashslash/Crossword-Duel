@@ -15,6 +15,7 @@ import { withTimeout } from '../ai/types.js';
 import { AIError } from '../ai/anthropic.js';
 import { lookupDefinition, type Sense } from '../words/definitions.js';
 import { wordsFor } from '../words/wordBank.js';
+import type { FinishedGame } from '../history.js';
 import { addBestClue } from '../words/clueLibrary.js';
 
 /** Definitions the AI wrote for words missing from the dictionary (shared by all games). */
@@ -70,8 +71,9 @@ interface FinalClue {
 export interface Player {
   id: string;
   token: string;
-  /** Account id when the player is signed in; undefined for guests. */
+  /** Account id and username when the player is signed in; undefined for guests. */
   userId?: string;
+  username?: string;
   name: string;
   sockets: Set<string>;
   connected: boolean;
@@ -85,6 +87,8 @@ export interface Player {
 
 export interface RoomDeps {
   ai: ClueAI;
+  /** Called once when a game ends (used to save history for signed-in players). */
+  onFinished?: (game: FinishedGame) => void;
   /** Pushes a fresh GameView to one player's open connections. */
   send: (player: Player, view: GameView) => void;
 }
@@ -114,12 +118,13 @@ export class Room {
 
   // ── Players & connections ─────────────────────────────────
 
-  addPlayer(name: string, userId?: string): Player {
+  addPlayer(name: string, account?: { id: string; username: string }): Player {
     const taken = this.players.some((p) => p.name.toLowerCase() === name.toLowerCase());
     const player: Player = {
       id: randomUUID(),
       token: randomUUID(),
-      userId,
+      userId: account?.id,
+      username: account?.username,
       name: taken ? `${name} (2)` : name,
       sockets: new Set(),
       connected: false,
@@ -756,6 +761,15 @@ export class Room {
       }),
       grids: this.revealGrids(),
     };
+    try {
+      this.deps.onFinished?.({
+        result: this.result,
+        meta: { difficulty: this.difficulty, theme: this.theme, timerMode: this.timerMode },
+        userIds: this.players.map((p) => p.userId),
+      });
+    } catch (e) {
+      console.error('[game] onFinished failed', e);
+    }
     this.touch();
     this.broadcast();
   }
@@ -843,6 +857,7 @@ export class Room {
       you: p.id,
       players: this.players.map((x, i): PlayerInfo => ({
         id: x.id, name: x.name, isHost: i === 0, connected: x.connected, ready: x.ready,
+        ...(x.username ? { username: x.username } : {}),
         left: x.left, reconnectDeadline: x.reconnectDeadline,
       })),
       serverNow: now,

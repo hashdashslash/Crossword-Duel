@@ -3,6 +3,8 @@
  * Opponents are matched by name (case-insensitive).
  */
 import type { GameResult } from '../../../shared/protocol';
+import { useEffect, useState } from 'react';
+import { useAuth } from './auth';
 import { local } from './storage';
 
 const KEY = 'cd.record';
@@ -59,4 +61,34 @@ export function recordResult(result: GameResult, you: string): HeadToHead | null
 export function describeRecord(r: HeadToHead): string {
   const part = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : word === 'loss' ? 'es' : 's'}`;
   return [part(r.wins, 'win'), part(r.losses, 'loss'), ...(r.draws ? [part(r.draws, 'draw')] : [])].join(' · ');
+}
+
+/**
+ * Head-to-head record against an opponent: from the server for signed-in
+ * players (follows them across devices), otherwise from this browser.
+ * `refreshKey` refetches (e.g. a new result id).
+ */
+export function useHeadToHead(opponent: { name: string; username?: string } | null, refreshKey = ''): HeadToHead | null {
+  const { user } = useAuth();
+  const [server, setServer] = useState<HeadToHead | null>(null);
+  const name = opponent?.name ?? '';
+  const username = opponent?.username ?? '';
+  useEffect(() => {
+    setServer(null);
+    if (!user || !name) return;
+    let cancelled = false;
+    // Give the server a moment to save a game that just ended.
+    const t = setTimeout(() => {
+      fetch(`/api/record?${new URLSearchParams({ name, username })}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((r: { wins: number; losses: number; draws: number } | null) => {
+          if (!cancelled && r) setServer({ name: username || name.replace(/ \(2\)$/, ''), ...r });
+        })
+        .catch(() => {});
+    }, refreshKey ? 800 : 0);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [user?.id, name, username, refreshKey]);
+  if (!opponent) return null;
+  if (user) return server && server.wins + server.losses + server.draws > 0 ? server : null;
+  return recordFor(opponent.name);
 }

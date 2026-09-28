@@ -11,6 +11,7 @@ import type { ClientToServerEvents, ServerToClientEvents } from '../shared/proto
 import type { ClueAI } from './ai/types.js';
 import { Accounts, attachAuthRoutes } from './accounts/accounts.js';
 import type { Db } from './db/index.js';
+import { attachHistoryRoutes, History } from './history.js';
 import { attachGameServer } from './game/socket.js';
 import { createDaily } from './daily.js';
 import { checkPractice, createPractice } from './practice.js';
@@ -30,6 +31,8 @@ export function createGameServer(opts: { ai: ClueAI; db?: Db | null }) {
   app.use(express.json({ limit: '100kb' }));
   const accounts = opts.db ? new Accounts(opts.db) : null;
   attachAuthRoutes(app, accounts);
+  const history = opts.db ? new History(opts.db) : null;
+  attachHistoryRoutes(app, accounts, history);
 
   app.get('/api/config', (_req, res) => {
     res.json({ aiMode: opts.ai.mode, bootId: BOOT_ID });
@@ -84,6 +87,6 @@ export function createGameServer(opts: { ai: ClueAI; db?: Db | null }) {
     pingInterval: 10_000,
     pingTimeout: 8_000,
   });
-  const game = attachGameServer(io, { ai: opts.ai, accounts });
-  return { http, io, rooms: game.rooms, accounts };
+  const game = attachGameServer(io, { ai: opts.ai, accounts, onFinished: history ? (g) => void history.save(g) : undefined });
+  return { http, io, rooms: game.rooms, accounts, history };
 }

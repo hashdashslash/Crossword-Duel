@@ -14,6 +14,8 @@ export interface PlayerInfo {
   isHost: boolean;
   connected: boolean;
   ready: boolean;
+  /** Account username when the player is signed in. */
+  username?: string;
   /** The player left the room for good. */
   left: boolean;
   /** Server time when a disconnected player forfeits / is removed. */

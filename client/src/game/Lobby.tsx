@@ -3,7 +3,7 @@ import { CONFIG, poolSeconds, THEME_LABELS, THEMES, TIMER_MODES, type TimerMode 
 import type { GameView, PlayerInfo } from '../../../shared/protocol';
 import { DifficultyPicker, LABELS } from '../components/DifficultyPicker';
 import { Logo, MuteButton } from '../components/ui';
-import { describeRecord, recordFor } from '../lib/record';
+import { describeRecord, useHeadToHead } from '../lib/record';
 import { formatTime } from '../solve/Timer';
 import type { GameSocket } from './socket';
 
@@ -81,7 +81,7 @@ export function Lobby({ view, me, opponent, socket, onLeave, banner }: Props) {
               <span className="muted">Waiting for opponent…</span>
             </div>
           )}
-          {opponentHere && <HeadToHeadLine name={opponent.name} />}
+          {opponentHere && <HeadToHeadLine opponent={opponent} />}
         </div>
 
         <div className="panel">
@@ -149,8 +149,8 @@ function TimerModePicker({ value, onChange }: { value: TimerMode; onChange: (m: 
   );
 }
 
-function HeadToHeadLine({ name }: { name: string }) {
-  const record = recordFor(name);
+function HeadToHeadLine({ opponent }: { opponent: PlayerInfo }) {
+  const record = useHeadToHead(opponent);
   if (!record) return null;
   return <p className="head-to-head muted">Your record vs {record.name}: <b>{describeRecord(record)}</b></p>;
 }

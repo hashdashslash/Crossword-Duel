@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { CONFIG, type Difficulty } from '../../shared/config';
 import { validateName } from '../../shared/rules';
 import { DifficultyPicker } from './components/DifficultyPicker';
-import { HowToPlayButton, IntroPopup, RulesModal, shouldShowIntro } from './components/HowToPlay';
+import { HowToPlayButton } from './components/HowToPlay';
 import { Logo } from './components/ui';
 import { getSocket } from './game/socket';
 import { tokenKey } from './game/useGame';
@@ -48,8 +48,6 @@ export function Home() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [intro, setIntro] = useState(shouldShowIntro);
-  const [rules, setRules] = useState(false);
   const { user } = useAuth();
   const { invites } = useSocial();
 
@@ -117,8 +115,6 @@ export function Home() {
         {error && <p className="message center">{error}</p>}
 
         <DailyCard />
-        {intro && <IntroPopup onClose={() => setIntro(false)} onRules={() => setRules(true)} />}
-        {rules && <RulesModal onClose={() => setRules(false)} />}
 
         <div className="home-links">
           <button className="link" onClick={() => navigate('/practice')}>Practice solo</button>

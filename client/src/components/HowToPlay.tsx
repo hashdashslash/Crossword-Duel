@@ -1,15 +1,11 @@
 /**
- * How to play: a short first-visit popup, and the full rules (from the menu).
+ * How to play: the full rules, opened from the "How to play" button.
  * Numbers come from CONFIG so the rules always match the game.
  */
 import { useState } from 'react';
 import { CONFIG, poolSeconds } from '../../../shared/config';
-import { local, session } from '../lib/storage';
 import { formatTime } from '../solve/Timer';
 import { Modal } from './ui';
-
-const HIDE_KEY = 'cd.intro.hidden';
-const SEEN_THIS_VISIT = 'cd.intro.seen';
 
 const HEADLINE = 'Write challenging clues to slow your opponent down — but they must be fair and solvable.';
 
@@ -37,37 +33,6 @@ export function ClueExamples() {
   );
 }
 
-/** Whether the first-visit popup should show. */
-export function shouldShowIntro(): boolean {
-  return local.get(HIDE_KEY) !== '1' && session.get(SEEN_THIS_VISIT) !== '1';
-}
-
-/** Short popup for new players. "Got it" hides it for this visit; "Don't show again" for good. */
-export function IntroPopup({ onClose, onRules }: { onClose: () => void; onRules?: () => void }) {
-  const close = (forever: boolean) => {
-    session.set(SEEN_THIS_VISIT, '1');
-    if (forever) local.set(HIDE_KEY, '1');
-    onClose();
-  };
-  return (
-    <Modal onClose={() => close(false)} labelledBy="intro-title">
-      <div className="intro-popup">
-        <h2 id="intro-title" className="intro-headline">{HEADLINE}</h2>
-        <p className="intro-sub">
-          This is a duel: you're <b>not</b> helping your opponent. You each solve the crossword the other one wrote,
-          and the <b>fastest correct solve wins</b>, so tricky-but-fair clues are how you win.
-        </p>
-        <ClueExamples />
-        <div className="card-actions">
-          <button className="primary" onClick={() => close(false)} autoFocus>Got it</button>
-          <button className="ghost" onClick={() => close(true)}>Don't show again</button>
-          {onRules && <button className="link" onClick={() => { close(false); onRules(); }}>Read the full rules</button>}
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
 /** The full rules. */
 export function RulesModal({ onClose }: { onClose: () => void }) {
   return (
@@ -77,6 +42,7 @@ export function RulesModal({ onClose }: { onClose: () => void }) {
 
         <h3>The idea</h3>
         <p>{HEADLINE}</p>
+        <p>This is a duel: you're <b>not</b> helping your opponent. The <b>fastest correct solve wins</b>, so tricky-but-fair clues are how you win.</p>
         <ol>
           <li>Create a game and send the link (or invite a friend). Both players press <b>Ready</b>.</li>
           <li>You each get {CONFIG.wordsPerGrid} secret words and write a clue for each one.</li>

@@ -5,6 +5,7 @@
  */
 import type { Difficulty, Theme, TimerMode } from './config.js';
 import type { CellPos, Direction, PuzzleView } from './puzzle.js';
+import type { GameInvite } from './friends.js';
 
 export type Phase = 'lobby' | 'writing' | 'reviewing' | 'solving' | 'finished';
 
@@ -175,10 +176,20 @@ export interface ClientToServerEvents {
   'solve:resign': () => void;
   'game:rematch': () => void;
   'game:vote': (clueIndex: number) => void;
+  /** Host only, in the lobby: invite a friend to this game. */
+  'invite:send': (p: { friendId: string }, ack: Ack<{ ok: true }>) => void;
+  /** Invites waiting for you. */
+  'invite:list': (ack: (invites: GameInvite[]) => void) => void;
+  /** Accepting joins the game; the reply carries the seat token. */
+  'invite:respond': (p: { id: string; accept: boolean }, ack: Ack<{ ok: true; code?: string; token?: string }>) => void;
 }
 
 export interface ServerToClientEvents {
   state: (view: GameView) => void;
   /** The server is shutting down (for an update or a restart); games in progress will be lost. */
   'server:restarting': () => void;
+  /** Your friends or invites changed (a request, an accept, a new or expired invite): fetch them again. */
+  'social:changed': () => void;
+  /** A friend declined your invite to this game. */
+  'invite:declined': (p: { username: string }) => void;
 }

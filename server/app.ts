@@ -12,6 +12,7 @@ import type { ClueAI } from './ai/types.js';
 import { Accounts, attachAuthRoutes } from './accounts/accounts.js';
 import type { Db } from './db/index.js';
 import { attachHistoryRoutes, History } from './history.js';
+import { attachFriendRoutes, Friends } from './friends.js';
 import { attachGameServer } from './game/socket.js';
 import { createDaily } from './daily.js';
 import { checkPractice, createPractice } from './practice.js';
@@ -33,6 +34,9 @@ export function createGameServer(opts: { ai: ClueAI; db?: Db | null }) {
   attachAuthRoutes(app, accounts);
   const history = opts.db ? new History(opts.db) : null;
   attachHistoryRoutes(app, accounts, history);
+  const friends = accounts && opts.db ? new Friends(opts.db, accounts) : null;
+  let notify: (userId: string) => void = () => {};
+  attachFriendRoutes(app, accounts, friends, (id) => notify(id));
 
   app.get('/api/config', (_req, res) => {
     res.json({ aiMode: opts.ai.mode, bootId: BOOT_ID });
@@ -87,6 +91,7 @@ export function createGameServer(opts: { ai: ClueAI; db?: Db | null }) {
     pingInterval: 10_000,
     pingTimeout: 8_000,
   });
-  const game = attachGameServer(io, { ai: opts.ai, accounts, onFinished: history ? (g) => void history.save(g) : undefined });
-  return { http, io, rooms: game.rooms, accounts, history };
+  const game = attachGameServer(io, { ai: opts.ai, accounts, friends, onFinished: history ? (g) => void history.save(g) : undefined });
+  notify = game.notify;
+  return { http, io, rooms: game.rooms, accounts, history, friends };
 }

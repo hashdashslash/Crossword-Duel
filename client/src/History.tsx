@@ -14,7 +14,7 @@ const dateLabel = (iso: string) =>
 
 const OUTCOME = { win: 'Won', loss: 'Lost', draw: 'Draw' } as const;
 
-function BackBar() {
+export function BackBar() {
   return <button className="ghost small back-link" onClick={() => (history.length > 1 ? history.back() : navigate('/'))}>← Back</button>;
 }
 
@@ -204,7 +204,7 @@ export function ProfilePage({ username }: { username: string }) {
   );
 }
 
-function SignInNeeded({ what }: { what: string }) {
+export function SignInNeeded({ what }: { what: string }) {
   const next = encodeURIComponent(location.pathname);
   return (
     <div className="page-center"><div className="narrow">

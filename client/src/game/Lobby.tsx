@@ -6,6 +6,9 @@ import { Logo, MuteButton } from '../components/ui';
 import { describeRecord, useHeadToHead } from '../lib/record';
 import { formatTime } from '../solve/Timer';
 import type { GameSocket } from './socket';
+import { useAuth } from '../lib/auth';
+import { sendInvite, useSocial } from '../lib/social';
+import { navigate } from '../lib/router';
 
 interface Props {
   view: GameView;
@@ -70,6 +73,7 @@ export function Lobby({ view, me, opponent, socket, onLeave, banner }: Props) {
             </div>
             {'share' in navigator && <button className="ghost wide" onClick={share}>Share…</button>}
             <p className="muted small-print">Or they can enter the code <span className="code-chip">{view.code}</span> on the home page.</p>
+            <InviteFriends code={view.code} />
           </div>
         )}
 
@@ -127,6 +131,37 @@ export function Lobby({ view, me, opponent, socket, onLeave, banner }: Props) {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** For signed-in hosts: invite a friend in-app, alongside the link. */
+function InviteFriends({ code }: { code: string }) {
+  const { user } = useAuth();
+  const { friends, declined, sent } = useSocial();
+  const [error, setError] = useState('');
+  if (!user) return null;
+  const invited = new Set(sent[code] ?? []);
+  const invite = async (id: string) => {
+    const err = await sendInvite(code, id);
+    setError(err ?? '');
+  };
+  return (
+    <div className="lobby-friends">
+      <p className="muted">Or invite a friend:</p>
+      {!friends.friends.length && (
+        <p className="muted small-print">No friends yet. <button className="link" onClick={() => navigate('/friends')}>Add friends</button> to invite them here.</p>
+      )}
+      {friends.friends.map((f) => (
+        <div className="friend-row" key={f.id}>
+          <span>{f.username}</span>
+          {invited.has(f.id)
+            ? <span className="muted small-print">Invited ✓</span>
+            : <button className="ghost small" onClick={() => invite(f.id)}>Invite</button>}
+        </div>
+      ))}
+      {declined && <p className="muted small-print" role="status">{declined} declined your invite.</p>}
+      {error && <p className="message">{error}</p>}
     </div>
   );
 }

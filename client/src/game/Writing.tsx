@@ -196,8 +196,9 @@ function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | '
                 className={`dot-btn ${i === index ? 'dot current' : w.done ? (w.blank ? 'dot blank' : 'dot done') : 'dot'}`}
                 aria-label={`Word ${i + 1}: ${w.answer}${w.done ? (w.blank ? ' (left blank)' : ' (written)') : ''}`}
                 aria-current={i === index}
-                onPointerDown={(e) => { e.preventDefault(); goto(i); }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goto(i); } }}
+                // Keep the cursor in the clue box; the click (also sent by keyboards and screen readers) jumps.
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => goto(i)}
               />
             ))}
           </div>

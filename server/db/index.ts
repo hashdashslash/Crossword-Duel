@@ -7,8 +7,12 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { MIGRATIONS } from './migrations.js';
 
+type Query = <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<{ rows: T[] }>;
+
 export interface Db {
-  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
+  query: Query;
+  /** Runs `fn` on one connection inside BEGIN/COMMIT (ROLLBACK if it throws). */
+  transaction<T>(fn: (query: Query) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 
@@ -23,6 +27,21 @@ async function postgres(url: string): Promise<Db> {
   pool.on('error', (e) => console.error('[db] idle client error:', e.message));
   return {
     query: async <T,>(sql: string, params: unknown[] = []) => ({ rows: (await pool.query(sql, params)).rows as T[] }),
+    // A pool hands each query to any free connection, so a transaction must hold one client.
+    transaction: async (fn) => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const out = await fn(async <T,>(sql: string, params: unknown[] = []) => ({ rows: (await client.query(sql, params)).rows as T[] }));
+        await client.query('COMMIT');
+        return out;
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
+    },
     close: () => pool.end(),
   };
 }
@@ -34,6 +53,7 @@ export async function embedded(dir: string | null): Promise<Db> {
   const db = dir ? new PGlite(dir) : new PGlite();
   return {
     query: async <T,>(sql: string, params: unknown[] = []) => ({ rows: (await db.query<T>(sql, params)).rows }),
+    transaction: (fn) => db.transaction((tx) => fn(async <T,>(sql: string, params: unknown[] = []) => ({ rows: (await tx.query<T>(sql, params)).rows }))),
     close: () => db.close(),
   };
 }
@@ -45,15 +65,10 @@ export async function migrate(db: Db) {
   for (const [i, sql] of MIGRATIONS.entries()) {
     const version = i + 1;
     if (done.has(version)) continue;
-    await db.query('BEGIN');
-    try {
-      for (const stmt of sql.split(/;\s*$/m).map((s) => s.trim()).filter(Boolean)) await db.query(stmt);
-      await db.query('INSERT INTO schema_migrations (version) VALUES ($1)', [version]);
-      await db.query('COMMIT');
-    } catch (e) {
-      await db.query('ROLLBACK');
-      throw e;
-    }
+    await db.transaction(async (query) => {
+      for (const stmt of sql.split(/;\s*$/m).map((s) => s.trim()).filter(Boolean)) await query(stmt);
+      await query('INSERT INTO schema_migrations (version) VALUES ($1)', [version]);
+    });
   }
 }
 

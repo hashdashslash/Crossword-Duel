@@ -1,7 +1,10 @@
 import { useState, type ReactNode } from 'react';
+import { CONFIG, poolSeconds, TIMER_MODES, type TimerMode } from '../../../shared/config';
 import type { GameView, PlayerInfo } from '../../../shared/protocol';
 import { DifficultyPicker, LABELS } from '../components/DifficultyPicker';
 import { Logo, MuteButton } from '../components/ui';
+import { describeRecord, recordFor } from '../lib/record';
+import { formatTime } from '../solve/Timer';
 import type { GameSocket } from './socket';
 
 interface Props {
@@ -78,6 +81,7 @@ export function Lobby({ view, me, opponent, socket, onLeave, banner }: Props) {
               <span className="muted">Waiting for opponent…</span>
             </div>
           )}
+          {opponentHere && <HeadToHeadLine name={opponent.name} />}
         </div>
 
         <div className="panel">
@@ -88,6 +92,15 @@ export function Lobby({ view, me, opponent, socket, onLeave, banner }: Props) {
             ) : (
               <p className="difficulty-read">{LABELS[view.difficulty]}</p>
             )}
+          </div>
+          <div className="field">
+            <span>Clue timer {me.isHost ? '' : <span className="muted">(the host chooses)</span>}</span>
+            {me.isHost ? (
+              <TimerModePicker value={view.timerMode} onChange={(m) => socket.emit('lobby:timer-mode', m)} />
+            ) : (
+              <p className="difficulty-read">{TIMER_LABELS[view.timerMode]}</p>
+            )}
+            <p className="muted small-print timer-help">{TIMER_HELP[view.timerMode]()}</p>
           </div>
           <button
             className={me.ready ? 'ghost big wide' : 'primary big'}
@@ -106,6 +119,30 @@ export function Lobby({ view, me, opponent, socket, onLeave, banner }: Props) {
       </div>
     </div>
   );
+}
+
+const TIMER_LABELS: Record<TimerMode, string> = { perWord: 'Per word', pool: 'Shared clock' };
+const TIMER_HELP: Record<TimerMode, () => string> = {
+  perWord: () => `${CONFIG.secondsPerClue} seconds for each word, one at a time.`,
+  pool: () => `${formatTime(poolSeconds() * 1000)} for all ${CONFIG.wordsPerGrid} words. Jump between words and revise any clue.`,
+};
+
+function TimerModePicker({ value, onChange }: { value: TimerMode; onChange: (m: TimerMode) => void }) {
+  return (
+    <div className="segmented" role="radiogroup" aria-label="Clue timer">
+      {TIMER_MODES.map((m) => (
+        <button key={m} role="radio" aria-checked={m === value} className={m === value ? 'on' : ''} onClick={() => onChange(m)}>
+          {TIMER_LABELS[m]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function HeadToHeadLine({ name }: { name: string }) {
+  const record = recordFor(name);
+  if (!record) return null;
+  return <p className="head-to-head muted">Your record vs {record.name}: <b>{describeRecord(record)}</b></p>;
 }
 
 function PlayerRow({ player, you }: { player: PlayerInfo; you?: boolean }) {

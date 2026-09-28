@@ -4,10 +4,10 @@
  * only ever receive a GameView built for them (never the answers they solve).
  */
 import { randomUUID } from 'node:crypto';
-import { CONFIG, type Difficulty } from '../../shared/config.js';
+import { CONFIG, poolSeconds, type Difficulty, type TimerMode } from '../../shared/config.js';
 import type { CellPos, PuzzleView } from '../../shared/puzzle.js';
 import type {
-  EndReason, FlaggedClue, GameResult, GameView, NextResult, Phase, PlayerInfo, RevealGrid,
+  BestClueVote, EndReason, FlaggedClue, GameResult, GameView, NextResult, Phase, PlayerInfo, RevealGrid,
 } from '../../shared/protocol.js';
 import { cleanClue, clueContainsAnswer } from '../../shared/rules.js';
 import type { ClueAI, QuickCheckResult, ReviewItem, ReviewVerdict } from '../ai/types.js';
@@ -38,6 +38,8 @@ interface WritingState {
   deadline: number | null;
   introDone: boolean;
   introDeadline: number;
+  /** Pool mode: server time when all writing ends. */
+  poolDeadline: number | null;
   timer?: NodeJS.Timeout;
   checkCache: Map<string, QuickCheckResult>;
   /** AI checks used on the current word (capped to protect API spend). */
@@ -96,6 +98,9 @@ export class Room {
   private solveStartedAt = 0;
   private tickTimer?: NodeJS.Timeout;
   private result?: GameResult;
+  private votes: Record<string, BestClueVote> = {};
+  /** Clue-writing clock for the next game (the host chooses in the lobby). */
+  timerMode: TimerMode = 'perWord';
   /** Bumped every new game so late async work from an old game is ignored. */
   private generation = 0;
 
@@ -207,6 +212,14 @@ export class Room {
     this.broadcast();
   }
 
+  setTimerMode(p: Player, mode: TimerMode) {
+    if (this.phase !== 'lobby' || this.players[0] !== p) return;
+    this.timerMode = mode;
+    for (const o of this.players) o.ready = false;
+    this.touch();
+    this.broadcast();
+  }
+
   setReady(p: Player, ready: boolean) {
     if (this.phase !== 'lobby') return;
     p.ready = ready;
@@ -221,6 +234,7 @@ export class Room {
     this.grids = [gridA, gridB];
     this.generation++;
     this.result = undefined;
+    this.votes = {};
     this.reviewSkipped = false;
     this.finalClues = [[], []];
     this.solveStartedAt = 0;
@@ -237,6 +251,7 @@ export class Room {
         deadline: null,
         introDone: false,
         introDeadline: now + CONFIG.writingIntroSeconds * 1000,
+        poolDeadline: null,
         checkCache: new Map(),
         checksThisWord: 0,
       };
@@ -253,7 +268,8 @@ export class Room {
     const w = p.writing;
     if (this.phase !== 'writing' || !w || w.introDone) return;
     w.introDone = true;
-    this.startWordTimer(p);
+    if (this.timerMode === 'pool') this.startPoolTimer(p);
+    else this.startWordTimer(p);
     this.broadcast();
   }
 
@@ -270,11 +286,52 @@ export class Room {
     }, CONFIG.secondsPerClue * 1000);
   }
 
+  /** Pool mode: one clock for all words. When it runs out, every unfinished word takes what was typed. */
+  private startPoolTimer(p: Player) {
+    const w = p.writing!;
+    clearTimeout(w.timer);
+    const ms = poolSeconds() * 1000;
+    w.poolDeadline = Date.now() + ms;
+    w.deadline = w.poolDeadline;
+    const gen = this.generation;
+    w.timer = setTimeout(() => {
+      if (gen !== this.generation || this.phase !== 'writing') return;
+      this.finishPool(p);
+    }, ms);
+  }
+
+  private finishPool(p: Player) {
+    const w = p.writing!;
+    for (const slot of w.slots) {
+      if (slot.done) continue;
+      const text = clueContainsAnswer(slot.draft, slot.answer) ? '' : slot.draft;
+      slot.text = text;
+      slot.blank = !text;
+      slot.done = true;
+    }
+    w.index = w.slots.length;
+    w.deadline = null;
+    this.afterWritingChange();
+  }
+
+  /** Pool mode: move to any word (including one already written, to revise it). */
+  goto(p: Player, index: number) {
+    const w = p.writing;
+    if (this.phase !== 'writing' || this.timerMode !== 'pool' || !w || !w.introDone || w.index >= w.slots.length) return;
+    const slot = w.slots[index];
+    if (!slot || index === w.index) return;
+    w.index = index;
+    w.checksThisWord = 0;
+    if (slot.done) slot.draft = slot.text;
+    this.touch();
+    this.broadcast();
+  }
+
   draft(p: Player, index: number, text: string) {
     const w = p.writing;
     if (this.phase !== 'writing' || !w || index !== w.index || !w.introDone) return;
     const slot = w.slots[index];
-    if (slot && !slot.done) slot.draft = cleanClue(text);
+    if (slot && (!slot.done || this.timerMode === 'pool')) slot.draft = cleanClue(text);
   }
 
   async next(p: Player, index: number, raw: string, mode: 'check' | 'keep' | 'blank'): Promise<NextResult> {
@@ -346,15 +403,32 @@ export class Room {
   private submitClue(p: Player, text: string) {
     const w = p.writing!;
     const slot = w.slots[w.index];
-    if (!slot || slot.done) return;
+    const pool = this.timerMode === 'pool';
+    if (!slot || (slot.done && !pool)) return;
     slot.text = text;
+    slot.draft = text;
     slot.blank = !text;
     slot.done = true;
-    w.index++;
     w.checksThisWord = 0;
-    clearTimeout(w.timer);
-    w.deadline = null;
-    if (w.index < w.slots.length) this.startWordTimer(p);
+    if (pool) {
+      // Next unwritten word after this one (wrapping round); all written means done.
+      const n = w.slots.length;
+      const next = Array.from({ length: n }, (_, k) => (w.index + 1 + k) % n).find((i) => !w.slots[i]!.done);
+      w.index = next ?? n;
+      if (next === undefined) {
+        clearTimeout(w.timer);
+        w.deadline = null;
+      }
+    } else {
+      w.index++;
+      clearTimeout(w.timer);
+      w.deadline = null;
+      if (w.index < w.slots.length) this.startWordTimer(p);
+    }
+    this.afterWritingChange();
+  }
+
+  private afterWritingChange() {
     this.touch();
     if (this.players.every((x) => x.writing && x.writing.index >= x.writing.slots.length)) {
       void this.runReview();
@@ -640,6 +714,7 @@ export class Room {
 
     const started = this.solveStartedAt > 0;
     this.result = {
+      id: randomUUID(),
       reason,
       winnerId,
       tieBreak,
@@ -708,11 +783,23 @@ export class Room {
     this.finalClues = [[], []];
     this.solveStartedAt = 0;
     this.result = undefined;
+    this.votes = {};
     for (const x of this.players) {
       x.ready = false;
       x.writing = undefined;
       x.solving = undefined;
     }
+    this.touch();
+    this.broadcast();
+  }
+
+  /** A "best clue" vote for one of the opponent's clues (in the grid this player solved). */
+  vote(p: Player, clueIndex: number) {
+    if (this.phase !== 'finished' || !this.result) return;
+    // Same rules the results screen shows: a written clue that wasn't replaced.
+    const clue = this.result.grids[this.solveGridIndex(p)]?.clues[clueIndex];
+    if (!Number.isInteger(clueIndex) || !clue || clue.prefilled || clue.original !== undefined) return;
+    this.votes = { ...this.votes, [p.id]: { clueIndex } };
     this.touch();
     this.broadcast();
   }
@@ -734,6 +821,7 @@ export class Room {
       code: this.code,
       phase: this.phase,
       difficulty: this.difficulty,
+      timerMode: this.timerMode,
       you: p.id,
       players: this.players.map((x, i): PlayerInfo => ({
         id: x.id, name: x.name, isHost: i === 0, connected: x.connected, ready: x.ready,
@@ -749,10 +837,11 @@ export class Room {
       view.writing = {
         introDone: w.introDone,
         introDeadline: w.introDone ? null : w.introDeadline,
+        timerMode: this.timerMode,
         words: w.slots.map((s) => ({ answer: s.answer, done: s.done, blank: s.blank })),
         index: w.index,
         deadline: w.deadline,
-        draft: slot && !slot.done ? slot.draft : '',
+        draft: slot && (!slot.done || this.timerMode === 'pool') ? slot.draft : '',
         done: w.index >= w.slots.length,
         opponentDoneCount: other?.writing ? Math.min(other.writing.index, other.writing.slots.length) : 0,
       };
@@ -777,7 +866,10 @@ export class Room {
       };
     }
 
-    if (this.phase === 'finished' && this.result) view.result = this.result;
+    if (this.phase === 'finished' && this.result) {
+      view.result = this.result;
+      view.votes = this.votes;
+    }
     return view;
   }
 }

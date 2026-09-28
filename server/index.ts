@@ -12,13 +12,22 @@ import { createGameServer, ROOT } from './app.js';
 if (existsSync(join(ROOT, '.env'))) process.loadEnvFile(join(ROOT, '.env'));
 
 const ai = createClueAI();
-const { http } = createGameServer({ ai });
+const { http, io } = createGameServer({ ai });
 const port = Number(process.env.PORT ?? 3001);
 http.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
   console.log(ai.mode === 'anthropic'
     ? 'AI: using the Anthropic API.'
     : 'AI: pretend mode (no ANTHROPIC_API_KEY set). Clues containing the word "wrong" are treated as bad.');
+  // Render (and most hosts) send SIGTERM before an update or restart. Games live in
+  // memory and will be lost, so tell everyone before going down.
+  const shutdown = () => {
+    console.log('Shutting down: telling connected players.');
+    io.emit('server:restarting');
+    setTimeout(() => process.exit(0), 1500).unref();
+  };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
   if ('client' in ai) {
     // Check the key, credit and model access once at startup, so problems show in the log.
     void runAISelfTest(ai as Parameters<typeof runAISelfTest>[0]).then(({ ok, lines }) => {

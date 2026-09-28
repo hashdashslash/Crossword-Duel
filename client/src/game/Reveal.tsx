@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { CONFIG } from '../../../shared/config';
-import type { GameResult, GameView, PlayerResult, RevealClue, RevealGrid } from '../../../shared/protocol';
+import type { BestClueVote, GameResult, GameView, PlayerResult, RevealClue, RevealGrid } from '../../../shared/protocol';
 import { MuteButton } from '../components/ui';
+import { describeRecord, recordFor } from '../lib/record';
 import { sfx } from '../lib/sound';
 import { formatTime } from '../solve/Timer';
 
@@ -10,12 +11,13 @@ interface Props {
   view: GameView;
   onRematch: () => void;
   onHome: () => void;
+  onVote: (clueIndex: number) => void;
 }
 
 /** Delay before each reveal step (ms): raw times, hints, flagged clues, final times, winner. */
 const STEP_DELAYS = [600, 1500, 1500, 1700, 1500];
 
-export function Reveal({ result, view, onRematch, onHome }: Props) {
+export function Reveal({ result, view, onRematch, onHome, onVote }: Props) {
   const me = result.players.find((p) => p.id === view.you)!;
   const opp = result.players.find((p) => p.id !== view.you)!;
   const short = result.reason === 'resign' || result.reason === 'forfeit';
@@ -47,6 +49,13 @@ export function Reveal({ result, view, onRematch, onHome }: Props) {
   const liveOpp = view.players.find((p) => p.id !== view.you);
   const oppLeft = !liveOpp || liveOpp.left;
   const oppWaiting = view.phase === 'lobby' && !oppLeft;
+
+  // Votes arrive while the room is on this game; keep the last ones seen after a rematch starts.
+  const [votes, setVotes] = useState<Record<string, BestClueVote>>({});
+  useEffect(() => {
+    if (view.phase === 'finished' && view.result?.id === result.id && view.votes) setVotes(view.votes);
+  }, [view.phase, view.result?.id, view.votes, result.id]);
+  const canVote = view.phase === 'finished' && view.result?.id === result.id;
 
   if (showGrids) return <GridsView grids={result.grids} onBack={() => setShowGrids(false)} />;
 
@@ -129,8 +138,15 @@ export function Reveal({ result, view, onRematch, onHome }: Props) {
         </div>
       )}
 
+      {step >= 5 && <HeadToHead result={result} you={view.you} />}
+
+      {step >= 5 && result.grids.length === 2 && (
+        <BestClue result={result} you={view.you} votes={votes} canVote={canVote} onVote={onVote} />
+      )}
+
       {step >= 5 && (
         <div className="reveal-actions">
+          <ShareButton result={result} you={view.you} />
           <button className="ghost" onClick={() => setShowGrids(true)}>View both grids</button>
           <button className="primary" onClick={onRematch} disabled={oppLeft}>Rematch</button>
           <button className="ghost" onClick={onHome}>Home</button>
@@ -140,6 +156,120 @@ export function Reveal({ result, view, onRematch, onHome }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Head-to-head record ─────────────────────────────────
+
+function HeadToHead({ result, you }: { result: GameResult; you: string }) {
+  const opp = result.players.find((p) => p.id !== you);
+  const record = opp ? recordFor(opp.name) : null;
+  if (!record) return null;
+  return <p className="head-to-head center muted">Your record vs {record.name}: <b>{describeRecord(record)}</b></p>;
+}
+
+// ── Share ───────────────────────────────────────────────
+
+/** A short, spoiler-free summary for group chats. */
+export function shareText(result: GameResult, you: string, origin: string): string {
+  const me = result.players.find((p) => p.id === you)!;
+  const opp = result.players.find((p) => p.id !== you)!;
+  const time = (p: PlayerResult) => (p.finalMs !== null ? formatTime(p.finalMs) : 'DNF');
+  let headline: string;
+  if (result.winnerId === null) headline = `Drew with ${opp.name}`;
+  else if (result.winnerId === you) {
+    headline = me.finalMs !== null && opp.finalMs !== null
+      ? `Beat ${opp.name} by ${formatTime(opp.finalMs - me.finalMs)}`
+      : `Beat ${opp.name}`;
+  } else headline = `Lost to ${opp.name}`;
+  if (result.reason === 'resign') headline += result.endedBy === you ? ' (I resigned)' : ' (they resigned)';
+  const hints = (p: PlayerResult) => `${p.hintsUsed} hint${p.hintsUsed === 1 ? '' : 's'}`;
+  return [
+    `Crossword Duel: ${headline} ${result.winnerId === you ? '🏆' : result.winnerId === null ? '🤝' : '❌'}`,
+    `Me ${time(me)} (${hints(me)}) · ${opp.name} ${time(opp)} (${hints(opp)})`,
+    origin,
+  ].join('\n');
+}
+
+function ShareButton({ result, you }: { result: GameResult; you: string }) {
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    const text = shareText(result, you, location.origin);
+    if ('share' in navigator) {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      window.prompt('Copy your result:', text);
+    }
+  };
+  return <button className="ghost" onClick={share}>{copied ? 'Copied!' : 'Share result'}</button>;
+}
+
+// ── Best clue vote ──────────────────────────────────────
+
+function BestClue({ result, you, votes, canVote, onVote }: {
+  result: GameResult;
+  you: string;
+  votes: Record<string, BestClueVote>;
+  canVote: boolean;
+  onVote: (clueIndex: number) => void;
+}) {
+  const meIndex = result.players.findIndex((p) => p.id === you);
+  const opp = result.players[1 - meIndex]!;
+  // grids[g] holds the clues written by players[g].
+  const theirGrid = result.grids[1 - meIndex]!;
+  const myGrid = result.grids[meIndex]!;
+  const myVote = votes[you];
+  const theirVote = votes[opp.id];
+  const choices = theirGrid.clues
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => !c.prefilled && c.original === undefined)
+    .sort((x, y) => (x.c.direction === y.c.direction ? x.c.number - y.c.number : x.c.direction === 'across' ? -1 : 1));
+  if (!choices.length) return null;
+  const label = (c: RevealClue) => `${c.number} ${c.direction === 'across' ? 'Across' : 'Down'}`;
+  const picked = myVote ? theirGrid.clues[myVote.clueIndex] : undefined;
+  const theirPick = theirVote ? myGrid.clues[theirVote.clueIndex] : undefined;
+
+  return (
+    <section className="panel best-clue">
+      <h2>Best clue</h2>
+      {theirPick ? (
+        <p className="best-clue-theirs">
+          <b>{opp.name}</b> picked your clue for <span className="answer">{theirPick.answer}</span>: “{theirPick.text}”
+        </p>
+      ) : myVote && canVote ? (
+        <p className="muted small-print">Waiting for {opp.name} to pick their favourite of your clues…</p>
+      ) : null}
+      {picked && (
+        <p className="best-clue-mine">
+          You picked {opp.name}'s clue for <span className="answer">{picked.answer}</span>: “{picked.text}”
+        </p>
+      )}
+      {canVote && (
+        <details className="best-clue-choose" open={!myVote}>
+          <summary>{myVote ? 'Change your pick' : `Which of ${opp.name}'s clues was the best?`}</summary>
+          <ul>
+            {choices.map(({ c, i }) => (
+              <li key={i}>
+                <button className={`best-clue-option ${myVote?.clueIndex === i ? 'on' : ''}`} onClick={() => onVote(i)} aria-pressed={myVote?.clueIndex === i}>
+                  <span className="muted small-print">{label(c)} · {c.answer}</span>
+                  <span>{c.text}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
   );
 }
 

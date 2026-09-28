@@ -456,3 +456,25 @@ h1, h2 { margin: 0; }
 .definition ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.4; }
 .definition p { margin: 0; }
 .definition .pos { font-style: italic; color: var(--blue-strong); font-weight: 600; margin-right: 4px; }
+
+/* ── Clue timer: shared clock (jumpable word dots) ─── */
+.dots.pool { gap: 6px; }
+.dot-btn { border: 0; padding: 0; width: 14px; height: 14px; cursor: pointer; }
+.dot-btn.current { transform: scale(1.25); }
+.dot-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ── Head-to-head record ──────────────────────────── */
+.timer-help { font-weight: 400; }
+.head-to-head { margin: 4px 0 0; font-size: 0.9rem; }
+.reveal .head-to-head { margin-top: 12px; }
+
+/* ── Best clue vote ───────────────────────────────── */
+.best-clue { max-width: 560px; margin: 24px auto 0; animation: fade 0.4s ease-out 0.3s both; }
+.best-clue h2 { font-size: 1.05rem; }
+.best-clue p { margin: 0; }
+.best-clue-theirs { background: var(--blue-soft); border-radius: var(--radius); padding: 10px 12px; }
+.best-clue-choose summary { cursor: pointer; font-weight: 600; }
+.best-clue-choose ul { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.best-clue-option { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; }
+.best-clue-option:hover { border-color: var(--blue); }
+.best-clue-option.on { border-color: var(--blue); background: var(--blue-soft); }

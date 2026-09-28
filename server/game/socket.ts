@@ -1,7 +1,7 @@
 /** Connects browsers to game rooms over Socket.IO. */
 import { randomInt } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
-import { DIFFICULTIES, type Difficulty } from '../../shared/config.js';
+import { DIFFICULTIES, TIMER_MODES, type Difficulty, type TimerMode } from '../../shared/config.js';
 import type { ClientToServerEvents, Err, ServerToClientEvents } from '../../shared/protocol.js';
 import { validateName } from '../../shared/rules.js';
 import type { ClueAI } from '../ai/types.js';
@@ -107,9 +107,13 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI }) {
     socket.on('lobby:difficulty', inRoom((r, p, d: Difficulty) => {
       if (DIFFICULTIES.includes(d)) r.setDifficulty(p, d);
     }));
+    socket.on('lobby:timer-mode', inRoom((r, p, m: TimerMode) => {
+      if (TIMER_MODES.includes(m)) r.setTimerMode(p, m);
+    }));
     socket.on('lobby:ready', inRoom((r, p, ready: boolean) => r.setReady(p, !!ready)));
 
     socket.on('write:intro-done', inRoom((r, p) => r.introDone(p)));
+    socket.on('write:goto', inRoom((r, p, index: number) => r.goto(p, Number(index))));
     socket.on('write:draft', inRoom((r, p, d: { index: number; text: string }) => r.draft(p, Number(d?.index), String(d?.text ?? ''))));
     socket.on('write:next', (d, ack) => {
       if (!room || !player) return ack(fail('Not in a game.'));
@@ -149,6 +153,7 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI }) {
     });
     socket.on('solve:resign', inRoom((r, p) => r.resign(p)));
     socket.on('game:rematch', inRoom((r, p) => r.rematch(p)));
+    socket.on('game:vote', inRoom((r, p, clueIndex: number) => r.vote(p, Number(clueIndex))));
 
     socket.on('disconnect', () => {
       if (room && player) room.disconnect(player, socket.id);

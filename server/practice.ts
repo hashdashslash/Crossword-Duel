@@ -1,14 +1,16 @@
 /**
- * Single-player practice puzzles (Phase 2). Clues are placeholders — each one
- * is the answer's letters scrambled — until real player-written clues arrive.
+ * Single-player practice puzzles. Clues are dictionary definitions from the
+ * built-in word list; a word with no usable definition gets its letters scrambled.
  */
 import { randomUUID } from 'node:crypto';
 import type { Difficulty } from '../shared/config.js';
+import { clueContainsAnswer } from '../shared/rules.js';
 import type { CheckResult, PuzzleView } from '../shared/puzzle.js';
 import { generateSingleGrid } from './grid/puzzles.js';
 import { createRng, randomSeed, shuffle } from './grid/rng.js';
 import type { Grid } from './grid/types.js';
 import { checkEntries } from './solve/check.js';
+import { lookupDefinition } from './words/definitions.js';
 
 interface PracticeGame {
   grid: Grid;
@@ -27,6 +29,16 @@ function scramble(answer: string, seed: number): string {
     if (s !== answer) return s;
   }
   return [...answer].reverse().join('');
+}
+
+/** The first definition that doesn't give the answer away, capitalised, or null. */
+export function definitionClue(answer: string): string | null {
+  for (const sense of lookupDefinition(answer) ?? []) {
+    const text = sense.text.trim();
+    if (!text || clueContainsAnswer(text, answer)) continue;
+    return text[0]!.toUpperCase() + text.slice(1);
+  }
+  return null;
 }
 
 export function toPuzzleView(id: string, grid: Grid, clueText: (answer: string, index: number) => string): PuzzleView {
@@ -53,7 +65,7 @@ export function createPractice(difficulty: Difficulty): PuzzleView {
   const grid = generateSingleGrid(difficulty);
   const id = randomUUID();
   const seed = randomSeed();
-  const view = toPuzzleView(id, grid, (answer, i) => `Unscramble: ${scramble(answer, seed + i)}`);
+  const view = toPuzzleView(id, grid, (answer, i) => definitionClue(answer) ?? `Unscramble: ${scramble(answer, seed + i)}`);
   games.set(id, { grid, view, startedAt: now });
   return view;
 }

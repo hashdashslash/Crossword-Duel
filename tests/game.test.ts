@@ -52,7 +52,7 @@ const emit = <R,>(c: Client, event: string, ...args: unknown[]) =>
   new Promise<R>((resolve) => (c.emit as (...a: unknown[]) => void)(event, ...args, resolve));
 
 /** Creates a room with two humans and gets both to the writing phase. */
-async function startGame() {
+async function startGame(opts: { pool?: boolean } = {}) {
   const a = client();
   const b = client();
   const created = await emit<{ ok: true; code: string; token: string }>(a, 'room:create', { name: 'Alice', difficulty: 'easy' });
@@ -61,6 +61,11 @@ async function startGame() {
   expect(joined.ok).toBe(true);
   await until(() => b.view?.players.length === 2);
   expect(b.view!.players.map((p) => p.name)).toEqual(['Alice', 'alice (2)']);
+  if (opts.pool) {
+    b.emit('lobby:timer-mode', 'pool'); // only the host may change it
+    a.emit('lobby:timer-mode', 'pool');
+    await until(() => b.view?.timerMode === 'pool');
+  }
   a.emit('lobby:ready', true);
   b.emit('lobby:ready', true);
   await until(() => a.view?.phase === 'writing' && b.view?.phase === 'writing');
@@ -188,12 +193,65 @@ describe('full game', () => {
       expect(g.entries).toEqual(g.cells.map((row) => row.map((cell) => cell ?? '')));
     }
     expect(result.grids[0]!.clues.some((c) => c.prefilled)).toBe(true);
+    expect(result.id).toBeTruthy();
+
+    // Best-clue votes: B solved A's grid (grids[0]); blank and flagged clues can't be picked.
+    const aGrid = result.grids[0]!;
+    const blankIdx = aGrid.clues.findIndex((c) => c.prefilled);
+    const flaggedIdx = aGrid.clues.findIndex((c) => c.original !== undefined);
+    const goodIdx = aGrid.clues.findIndex((c) => !c.prefilled && c.original === undefined);
+    b.emit('game:vote', blankIdx);
+    b.emit('game:vote', flaggedIdx);
+    b.emit('game:vote', goodIdx);
+    await until(() => a.view?.votes?.[rb!.id]);
+    expect(a.view!.votes![rb!.id]!.clueIndex).toBe(goodIdx);
+    expect(a.view!.votes![ra!.id]).toBeUndefined();
 
     // Rematch sends both back to the lobby, not ready.
     a.emit('game:rematch');
     await until(() => b.view?.phase === 'lobby');
     expect(b.view!.players.every((p) => !p.ready)).toBe(true);
   }, 30_000);
+
+  it('lets players jump between words and revise clues with a shared clock', async () => {
+    const { a, b } = await startGame({ pool: true });
+    for (const c of [a, b]) c.emit('write:intro-done');
+    await until(() => a.view?.writing?.introDone && b.view?.writing?.introDone);
+    const w = a.view!.writing!;
+    expect(w.timerMode).toBe('pool');
+    expect(w.deadline! - a.view!.serverNow).toBeGreaterThan((CONFIG.wordsPerGrid * CONFIG.secondsPerClue - 5) * 1000);
+    const n = w.words.length;
+    const next = (c: Client, index: number, text: string) =>
+      emit<{ ok: true; result: { status: string } }>(c, 'write:next', { index, text, mode: 'check' });
+
+    // A writes word 0, jumps to the last word, writes it, then comes back to revise word 0.
+    expect((await next(a, 0, 'Qzx first try')).result.status).toBe('advanced');
+    await until(() => a.view?.writing?.index === 1);
+    a.emit('write:goto', n - 1);
+    await until(() => a.view?.writing?.index === n - 1);
+    expect((await next(a, n - 1, 'Qzx last word')).result.status).toBe('advanced');
+    await until(() => a.view?.writing?.index === 1); // next unwritten word, wrapping round
+    a.emit('write:goto', 0);
+    await until(() => a.view?.writing?.index === 0);
+    expect(a.view!.writing!.draft).toBe('Qzx first try');
+    expect((await next(a, 0, 'Qzx revised')).result.status).toBe('advanced');
+    await until(() => a.view?.writing?.index === 1);
+    for (let i = 1; i < n - 1; i++) {
+      await until(() => a.view?.writing?.index === i);
+      await next(a, i, `Qzx word ${i}`);
+    }
+    await until(() => a.view?.writing?.done);
+
+    // B writes everything in order.
+    for (let i = 0; i < n; i++) {
+      await until(() => b.view?.writing?.index === i);
+      await next(b, i, `Qzx b ${i}`);
+    }
+    await until(() => b.view?.phase === 'solving');
+    const clues = b.view!.solving!.puzzle.clues.map((c) => c.text);
+    expect(clues).toContain('Qzx revised');
+    expect(clues).not.toContain('Qzx first try');
+  }, 20_000);
 
   it('ends immediately when a player resigns', async () => {
     const { a, b } = await startGame();
@@ -241,4 +299,25 @@ describe('full game', () => {
       cfg.reconnectWindowSeconds = 60;
     }
   }, 15_000);
+});
+
+describe('server info', () => {
+  it('reports a boot id so browsers can tell when the server restarted', async () => {
+    const res = await fetch(`${url}/api/config`);
+    const body = await res.json() as { bootId: string };
+    expect(body.bootId).toMatch(/[0-9a-f-]{36}/);
+  });
+});
+
+describe('practice', () => {
+  it('uses dictionary definitions as clues, never giving the answer away', async () => {
+    const res = await fetch(`${url}/api/practice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ difficulty: 'medium' }),
+    });
+    const view = await res.json() as { clues: { text: string }[] };
+    const scrambled = view.clues.filter((c) => c.text.startsWith('Unscramble:')).length;
+    expect(scrambled).toBeLessThan(view.clues.length / 2);
+  });
 });

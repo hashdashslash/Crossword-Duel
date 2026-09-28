@@ -83,6 +83,28 @@ function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | '
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
+  // Escape closes the definition.
+  const definitionOpen = definition.status !== 'hidden';
+  useEffect(() => {
+    if (!definitionOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDefinition({ status: 'hidden' }); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [definitionOpen]);
+
+  // The definition pushes the clue box down; on phones keep it above the on-screen keyboard.
+  useEffect(() => {
+    const input = inputRef.current;
+    if (definition.status === 'hidden' || !input || document.activeElement !== input) return;
+    const frame = requestAnimationFrame(() => {
+      const vv = window.visualViewport;
+      const visibleBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const overflow = input.getBoundingClientRect().bottom - visibleBottom;
+      if (overflow > 0) window.scrollBy({ top: overflow + 12, behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [definition.status]);
+
   const toggleDefinition = () => {
     if (definition.status !== 'hidden') return setDefinition({ status: 'hidden' });
     setDefinition({ status: 'loading' });
@@ -165,9 +187,10 @@ function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | '
           <button
             className="link define-btn"
             aria-expanded={definition.status !== 'hidden'}
-            // Keep the cursor in the clue box (and the phone keyboard open).
-            onPointerDown={(e) => { e.preventDefault(); toggleDefinition(); }}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDefinition(); } }}
+            // Keep the cursor in the clue box (and the phone keyboard open). The click still fires,
+            // and it's also what the keyboard and screen readers send.
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={toggleDefinition}
           >
             {definition.status === 'hidden' ? 'What does this mean?' : 'Hide definition'}
           </button>

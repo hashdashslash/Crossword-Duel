@@ -12,6 +12,8 @@ import { dailyResult, localDate } from './lib/daily';
 import { AccountBar } from './Account';
 import { useAuth } from './lib/auth';
 import { local, session } from './lib/storage';
+import { InviteList } from './Friends';
+import { useSocial } from './lib/social';
 
 export const NAME_KEY = 'cd.name';
 
@@ -49,6 +51,7 @@ export function Home() {
   const [intro, setIntro] = useState(shouldShowIntro);
   const [rules, setRules] = useState(false);
   const { user } = useAuth();
+  const { invites } = useSocial();
 
   const create = () => {
     const check = validateName(user?.username ?? name);
@@ -80,6 +83,8 @@ export function Home() {
         <Logo />
         <h1>Crossword Duel</h1>
         <p className="tagline">Write clues. Swap puzzles. Race to solve.</p>
+
+        <InviteList invites={invites} />
 
         <div className="panel">
           <NameField value={name} onChange={setName} />

@@ -45,4 +45,17 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX game_players_user ON game_players (user_id);
   `,
+  // 3: friends. One row per pair; `status` is pending until the addressee accepts.
+  `
+  CREATE TABLE friendships (
+    requester_id BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    addressee_id BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (requester_id, addressee_id),
+    CHECK (requester_id <> addressee_id)
+  );
+  CREATE UNIQUE INDEX friendships_pair ON friendships (LEAST(requester_id, addressee_id), GREATEST(requester_id, addressee_id));
+  CREATE INDEX friendships_addressee ON friendships (addressee_id);
+  `,
 ];

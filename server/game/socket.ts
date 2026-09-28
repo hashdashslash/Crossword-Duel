@@ -1,5 +1,5 @@
 /** Connects browsers to game rooms over Socket.IO. */
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
 import { DIFFICULTIES, THEMES, TIMER_MODES, type Difficulty, type Theme, type TimerMode } from '../../shared/config.js';
 import type { ClientToServerEvents, Err, ServerToClientEvents } from '../../shared/protocol.js';
@@ -8,6 +8,8 @@ import type { ClueAI } from '../ai/types.js';
 import type { Accounts } from '../accounts/accounts.js';
 import type { FinishedGame } from '../history.js';
 import type { PublicUser } from '../../shared/account.js';
+import { INVITE_TTL_MS, type GameInvite } from '../../shared/friends.js';
+import type { Friends } from '../friends.js';
 import { Room, type Player } from './room.js';
 
 type IO = Server<ClientToServerEvents, ServerToClientEvents>;
@@ -15,8 +17,40 @@ type Sock = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O (easily confused)
 
-export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts | null; onFinished?: (g: FinishedGame) => void }) {
+interface InviteRecord {
+  id: string;
+  code: string;
+  from: PublicUser;
+  toUserId: string;
+  expiresAt: number;
+}
+
+export const userChannel = (userId: string) => `user:${userId}`;
+
+export function attachGameServer(
+  io: IO,
+  opts: { ai: ClueAI; accounts?: Accounts | null; friends?: Friends | null; onFinished?: (g: FinishedGame) => void },
+) {
   const rooms = new Map<string, Room>();
+  const invites = new Map<string, InviteRecord>();
+  const notify = (userId: string) => io.to(userChannel(userId)).emit('social:changed');
+
+  /** An invite stays open while the host is still waiting alone in the lobby. */
+  const inviteRoom = (inv: InviteRecord) => {
+    const r = rooms.get(inv.code);
+    const host = r?.players[0];
+    if (!r || Date.now() > inv.expiresAt || r.canJoin() || !host || host.left || host.userId !== inv.from.id) return null;
+    return r;
+  };
+
+  /** Drops invites that can no longer be accepted and tells their recipients. */
+  const pruneInvites = () => {
+    for (const [id, inv] of invites) {
+      if (inviteRoom(inv)) continue;
+      invites.delete(id);
+      notify(inv.toUserId);
+    }
+  };
 
   const newCode = () => {
     for (;;) {
@@ -47,6 +81,7 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts
         rooms.delete(code);
       }
     }
+    pruneInvites();
   }, 60_000).unref();
 
   const fail = (error: string): Err => ({ ok: false, error });
@@ -63,6 +98,8 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts
     const user = (socket.data.user ?? null) as PublicUser | null;
     let room: Room | null = null;
     let player: Player | null = null;
+    // Friend requests and invites reach every tab this account has open.
+    if (user) void socket.join(userChannel(user.id));
 
     const bind = (r: Room, p: Player) => {
       if (room && player && (room !== r || player !== p)) room.disconnect(player, socket.id);
@@ -91,17 +128,23 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts
       bind(r, me);
     });
 
+    /** Takes the open seat. `reply` gets the token before the first game state is sent. */
+    const join = (r: Room, typedName: unknown, reply: (res: Err | { ok: true; token: string }) => void) => {
+      const blocked = r.canJoin();
+      if (blocked) return reply(fail(blocked));
+      if (user && r.players.some((x) => x.userId === user.id && !x.left)) return reply(fail("You're already in this game on another tab or device."));
+      const name = validateName(user?.username ?? typedName);
+      if (!name.ok) return reply(fail(name.error));
+      const me = r.addPlayer(name.name, user ?? undefined);
+      reply({ ok: true, token: me.token });
+      bind(r, me);
+      pruneInvites(); // the seat is taken, so other invites to this game close
+    };
+
     socket.on('room:join', (p, ack) => {
       const r = rooms.get(String(p?.code ?? '').toUpperCase());
       if (!r) return ack(fail("We couldn't find that game. Check the link or code."));
-      const blocked = r.canJoin();
-      if (blocked) return ack(fail(blocked));
-      if (user && r.players.some((x) => x.userId === user.id && !x.left)) return ack(fail("You're already in this game on another tab or device."));
-      const name = validateName(user?.username ?? p?.name);
-      if (!name.ok) return ack(fail(name.error));
-      const me = r.addPlayer(name.name, user ?? undefined);
-      ack({ ok: true, token: me.token });
-      bind(r, me);
+      join(r, p?.name, ack);
     });
 
     socket.on('room:rejoin', (p, ack) => {
@@ -116,7 +159,56 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts
       r.leave(p);
       room = null;
       player = null;
+      pruneInvites();
     }));
+
+    socket.on('invite:send', (p, ack) => {
+      if (!user || !opts.friends) return ack(fail('Sign in to invite friends.'));
+      const r = room;
+      if (!r || !player || r.players[0] !== player) return ack(fail('Only the host can invite.'));
+      const blocked = r.canJoin();
+      if (blocked) return ack(fail(blocked));
+      const friendId = String(p?.friendId ?? '');
+      opts.friends.areFriends(user.id, friendId)
+        .then((ok) => {
+          if (!ok) return ack(fail('You can only invite friends.'));
+          for (const inv of invites.values()) if (inv.code === r.code && inv.toUserId === friendId) invites.delete(inv.id);
+          const id = randomUUID();
+          invites.set(id, { id, code: r.code, from: user, toUserId: friendId, expiresAt: Date.now() + INVITE_TTL_MS });
+          notify(friendId);
+          ack({ ok: true });
+        })
+        .catch(() => ack(fail("Couldn't send the invite. Please try again.")));
+    });
+
+    socket.on('invite:list', (ack) => {
+      if (typeof ack !== 'function') return;
+      if (!user) return ack([]);
+      const list: GameInvite[] = [];
+      for (const inv of invites.values()) {
+        const r = inv.toUserId === user.id ? inviteRoom(inv) : null;
+        if (r) list.push({ id: inv.id, code: inv.code, from: inv.from, difficulty: r.difficulty, theme: r.theme, timerMode: r.timerMode, expiresAt: inv.expiresAt });
+      }
+      ack(list.sort((a, b) => b.expiresAt - a.expiresAt));
+    });
+
+    socket.on('invite:respond', (p, ack) => {
+      const inv = invites.get(String(p?.id ?? ''));
+      if (!user || !inv || inv.toUserId !== user.id) return ack(fail('This invite is no longer available.'));
+      invites.delete(inv.id);
+      const r = inviteRoom(inv);
+      if (!p?.accept) {
+        if (r) for (const id of r.players[0]!.sockets) io.to(id).emit('invite:declined', { username: user.username });
+        notify(user.id); // other tabs drop it too
+        return ack({ ok: true });
+      }
+      if (!r) return ack(fail('This invite has expired, or the game has already started.'));
+      join(r, user.username, (res) => {
+        if (!res.ok) return ack(res);
+        ack({ ok: true, code: r.code, token: res.token });
+        notify(user.id);
+      });
+    });
 
     socket.on('lobby:difficulty', inRoom((r, p, d: Difficulty) => {
       if (DIFFICULTIES.includes(d)) r.setDifficulty(p, d);
@@ -177,5 +269,5 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts
     });
   });
 
-  return { rooms };
+  return { rooms, notify };
 }

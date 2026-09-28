@@ -3,6 +3,7 @@ import { PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN, checkEmail, checkPassword, ch
 import { Logo } from './components/ui';
 import { signIn, signOut, signUp, useAuth } from './lib/auth';
 import { navigate } from './lib/router';
+import { useSocialBadge } from './lib/social';
 
 /** Sign in / create account. `?next=/path` returns there afterwards. */
 export function Account({ mode }: { mode: 'signin' | 'signup' }) {
@@ -92,6 +93,7 @@ export function AccountBar() {
       {auth.user ? (
         <>
           <button className="link" onClick={() => navigate(`/u/${auth.user!.username}`)}>{auth.user.username}</button>
+          <FriendsLink />
           <button className="link" onClick={() => navigate('/history')}>History</button>
           <AccountSignOut />
         </>
@@ -102,6 +104,15 @@ export function AccountBar() {
         </>
       )}
     </div>
+  );
+}
+
+function FriendsLink() {
+  const badge = useSocialBadge();
+  return (
+    <button className="link" onClick={() => navigate('/friends')}>
+      Friends{badge > 0 && <span className="badge" aria-label={`${badge} waiting`}>{badge}</span>}
+    </button>
   );
 }
 

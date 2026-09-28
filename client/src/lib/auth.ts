@@ -5,6 +5,7 @@
 import { useSyncExternalStore } from 'react';
 import type { PublicUser } from '../../../shared/account';
 import { getSocket } from '../game/socket';
+import { setSignedIn } from './social';
 
 interface AuthState {
   loaded: boolean;
@@ -19,6 +20,7 @@ function set(next: AuthState) {
   const changedUser = next.user?.id !== state.user?.id;
   state = next;
   listeners.forEach((l) => l());
+  if (changedUser) setSignedIn(!!next.user);
   // The game connection identifies the player when it connects, so reconnect after signing in or out.
   if (changedUser && next.loaded) {
     const socket = getSocket();
@@ -33,7 +35,10 @@ export async function refreshAuth() {
     const data = (await res.json()) as { enabled: boolean; user: PublicUser | null };
     const first = !state.loaded;
     state = first ? { loaded: true, enabled: data.enabled, user: data.user } : state;
-    if (first) listeners.forEach((l) => l());
+    if (first) {
+      listeners.forEach((l) => l());
+      setSignedIn(!!data.user);
+    }
     else set({ loaded: true, enabled: data.enabled, user: data.user });
   } catch {
     if (!state.loaded) set({ loaded: true, enabled: false, user: null });

@@ -70,6 +70,8 @@ interface FinalClue {
 export interface Player {
   id: string;
   token: string;
+  /** Account id when the player is signed in; undefined for guests. */
+  userId?: string;
   name: string;
   sockets: Set<string>;
   connected: boolean;
@@ -112,11 +114,12 @@ export class Room {
 
   // ── Players & connections ─────────────────────────────────
 
-  addPlayer(name: string): Player {
+  addPlayer(name: string, userId?: string): Player {
     const taken = this.players.some((p) => p.name.toLowerCase() === name.toLowerCase());
     const player: Player = {
       id: randomUUID(),
       token: randomUUID(),
+      userId,
       name: taken ? `${name} (2)` : name,
       sockets: new Set(),
       connected: false,

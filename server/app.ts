@@ -9,6 +9,8 @@ import { Server } from 'socket.io';
 import { DIFFICULTIES, type Difficulty } from '../shared/config.js';
 import type { ClientToServerEvents, ServerToClientEvents } from '../shared/protocol.js';
 import type { ClueAI } from './ai/types.js';
+import { Accounts, attachAuthRoutes } from './accounts/accounts.js';
+import type { Db } from './db/index.js';
 import { attachGameServer } from './game/socket.js';
 import { createDaily } from './daily.js';
 import { checkPractice, createPractice } from './practice.js';
@@ -21,9 +23,13 @@ export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  */
 export const BOOT_ID = randomUUID();
 
-export function createGameServer(opts: { ai: ClueAI }) {
+export function createGameServer(opts: { ai: ClueAI; db?: Db | null }) {
   const app = express();
+  // Render sits behind one proxy; this makes req.ip the player's address (for rate limits).
+  app.set('trust proxy', 1);
   app.use(express.json({ limit: '100kb' }));
+  const accounts = opts.db ? new Accounts(opts.db) : null;
+  attachAuthRoutes(app, accounts);
 
   app.get('/api/config', (_req, res) => {
     res.json({ aiMode: opts.ai.mode, bootId: BOOT_ID });
@@ -78,6 +84,6 @@ export function createGameServer(opts: { ai: ClueAI }) {
     pingInterval: 10_000,
     pingTimeout: 8_000,
   });
-  const game = attachGameServer(io, opts);
-  return { http, io, rooms: game.rooms };
+  const game = attachGameServer(io, { ai: opts.ai, accounts });
+  return { http, io, rooms: game.rooms, accounts };
 }

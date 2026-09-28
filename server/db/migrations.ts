@@ -22,4 +22,27 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX sessions_user ON sessions (user_id);
   `,
+  // 2: finished games (saved when at least one player is signed in)
+  `
+  CREATE TABLE games (
+    id TEXT PRIMARY KEY,
+    finished_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    difficulty TEXT NOT NULL,
+    theme TEXT NOT NULL,
+    timer_mode TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    result JSONB NOT NULL
+  );
+  CREATE TABLE game_players (
+    game_id TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+    seat SMALLINT NOT NULL,
+    player_id TEXT NOT NULL,
+    user_id BIGINT REFERENCES users (id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    final_ms INTEGER,
+    PRIMARY KEY (game_id, seat)
+  );
+  CREATE INDEX game_players_user ON game_players (user_id);
+  `,
 ];

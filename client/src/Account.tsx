@@ -91,7 +91,8 @@ export function AccountBar() {
     <div className="account-bar">
       {auth.user ? (
         <>
-          <span className="muted">Signed in as <b>{auth.user.username}</b></span>
+          <button className="link" onClick={() => navigate(`/u/${auth.user!.username}`)}>{auth.user.username}</button>
+          <button className="link" onClick={() => navigate('/history')}>History</button>
           <AccountSignOut />
         </>
       ) : (

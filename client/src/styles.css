@@ -554,7 +554,7 @@ h1, h2 { margin: 0; }
 .rules-modal .card-actions { margin-top: 16px; position: sticky; bottom: -32px; background: var(--surface); padding-bottom: 4px; }
 
 /* ── Accounts ─────────────────────────────────────── */
-.account-bar { display: flex; justify-content: flex-end; align-items: center; gap: 14px; min-height: 24px; margin-bottom: 8px; font-size: 0.9rem; flex-wrap: wrap; }
+.account-bar { display: flex; justify-content: center; align-items: center; gap: 14px; min-height: 24px; margin-bottom: 8px; font-size: 0.9rem; flex-wrap: wrap; }
 .account-bar .link { font-size: 0.9rem; }
 
 /* ── History and profile ──────────────────────────── */

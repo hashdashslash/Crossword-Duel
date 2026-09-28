@@ -99,7 +99,8 @@ notice, then a "the server restarted" page with a button to start a new game. Re
 ## 5. How a game works
 
 1. **Lobby** — enter a name, create a game, send the invite link (or 4-letter code). The host
-   picks Easy / Medium / Hard and the **clue timer**: *Per word* (30 seconds each, one at a time)
+   picks Easy / Medium / Hard, a **word theme** (Any words, Food & drink, Animals, Sports & games,
+   Nature & weather) and the **clue timer**: *Per word* (30 seconds each, one at a time)
    or *Shared clock* (7:30 for all 15 words; tap the dots to jump between words and revise any
    clue). If you've played this opponent before, the lobby shows your record against them. Both
    click **Ready**.
@@ -121,8 +122,17 @@ notice, then a "the server restarted" page with a button to start a new game. Re
 **Head-to-head record:** wins, losses and draws against each opponent (matched by name) are kept
 in your browser only.
 
-**Practice solo:** a single generated grid with dictionary definitions as clues (a word with no
-usable definition gets its letters scrambled instead).
+**Practice solo:** a single generated grid. Clues are ones players voted "best clue" in duels when
+there are any for that word, otherwise dictionary definitions (a word with neither gets its letters
+scrambled). Voted clues are saved in `data/best-clues.json` (or the folder set by `DATA_DIR`).
+On Render's free plan that file is wiped on every restart or update; keeping it needs a paid
+Render persistent disk mounted at `DATA_DIR`.
+
+**Daily puzzle:** one grid per day, the same for everyone, with dictionary clues. It changes at
+each player's midnight. Your times and streak are kept in your browser, and **Share** copies a
+line like "Crossword Duel Daily #12 · 4:31 · 🔥 3-day streak".
+
+**Dark mode** follows your device's setting.
 
 **Endings and tie-breaks:** the game ends when both finish, when the player still solving can
 no longer win, after 30 minutes, or on resignation / a disconnect of more than 60 seconds.
@@ -143,7 +153,7 @@ penalties, reconnect window, maximum solve time, grid size limits, AI models and
 strictness — is in **`shared/config.ts`**, each with a comment.
 
 The word lists are plain text files (one word per line) in `server/words/`
-(`easy.txt`, `medium.txt`, `hard.txt`). After editing, run `npm run words:check` and `npm run words:define`
+(`easy.txt`, `medium.txt`, `hard.txt`, and the theme lists in `server/words/themes/`). After editing, run `npm run words:check` and `npm run words:define`
 (which refreshes the definitions shown during clue writing). Definitions come from WordNet 3.1
 (© Princeton University; see `server/words/DEFINITIONS-LICENSE.txt`).
 

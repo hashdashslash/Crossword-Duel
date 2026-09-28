@@ -4,7 +4,7 @@
  * only ever receive a GameView built for them (never the answers they solve).
  */
 import { randomUUID } from 'node:crypto';
-import { CONFIG, poolSeconds, type Difficulty, type TimerMode } from '../../shared/config.js';
+import { CONFIG, poolSeconds, type Difficulty, type Theme, type TimerMode } from '../../shared/config.js';
 import type { CellPos, PuzzleView } from '../../shared/puzzle.js';
 import type {
   BestClueVote, EndReason, FlaggedClue, GameResult, GameView, NextResult, Phase, PlayerInfo, RevealGrid,
@@ -14,6 +14,8 @@ import type { ClueAI, QuickCheckResult, ReviewItem, ReviewVerdict } from '../ai/
 import { withTimeout } from '../ai/types.js';
 import { AIError } from '../ai/anthropic.js';
 import { lookupDefinition, type Sense } from '../words/definitions.js';
+import { wordsFor } from '../words/wordBank.js';
+import { addBestClue } from '../words/clueLibrary.js';
 
 /** Definitions the AI wrote for words missing from the dictionary (shared by all games). */
 const aiDefinitions = new Map<string, Sense[]>();
@@ -101,6 +103,8 @@ export class Room {
   private votes: Record<string, BestClueVote> = {};
   /** Clue-writing clock for the next game (the host chooses in the lobby). */
   timerMode: TimerMode = 'perWord';
+  /** Word theme for the next game (the host chooses in the lobby). */
+  theme: Theme = 'any';
   /** Bumped every new game so late async work from an old game is ignored. */
   private generation = 0;
 
@@ -220,6 +224,14 @@ export class Room {
     this.broadcast();
   }
 
+  setTheme(p: Player, theme: Theme) {
+    if (this.phase !== 'lobby' || this.players[0] !== p) return;
+    this.theme = theme;
+    for (const o of this.players) o.ready = false;
+    this.touch();
+    this.broadcast();
+  }
+
   setReady(p: Player, ready: boolean) {
     if (this.phase !== 'lobby') return;
     p.ready = ready;
@@ -230,7 +242,7 @@ export class Room {
   }
 
   private startGame() {
-    const { gridA, gridB } = generateGamePuzzles(this.difficulty);
+    const { gridA, gridB } = generateGamePuzzles(this.difficulty, { words: wordsFor(this.difficulty, this.theme) });
     this.grids = [gridA, gridB];
     this.generation++;
     this.result = undefined;
@@ -800,6 +812,8 @@ export class Room {
     const clue = this.result.grids[this.solveGridIndex(p)]?.clues[clueIndex];
     if (!Number.isInteger(clueIndex) || !clue || clue.prefilled || clue.original !== undefined) return;
     this.votes = { ...this.votes, [p.id]: { clueIndex } };
+    // Clues that passed the AI review are saved for practice puzzles.
+    if (!this.result.reviewSkipped) addBestClue(clue.answer, clue.text);
     this.touch();
     this.broadcast();
   }
@@ -822,6 +836,7 @@ export class Room {
       phase: this.phase,
       difficulty: this.difficulty,
       timerMode: this.timerMode,
+      theme: this.theme,
       you: p.id,
       players: this.players.map((x, i): PlayerInfo => ({
         id: x.id, name: x.name, isHost: i === 0, connected: x.connected, ready: x.ready,

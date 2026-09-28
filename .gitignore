@@ -2,4 +2,6 @@ node_modules/
 dist/
 .env
 *.log
+# Saved best clues (see server/words/clueLibrary.ts)
+data/
 .DS_Store

@@ -2,15 +2,23 @@
  * Plays real games over Socket.IO against an in-process server using the
  * pretend AI: lobby → clue writing → review → solving → hints → results.
  */
+import { mkdtempSync, readFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { io as connect, type Socket } from 'socket.io-client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CONFIG } from '../shared/config.js';
+import { CONFIG, type Theme } from '../shared/config.js';
 import type { ClientToServerEvents, GameView, ServerToClientEvents } from '../shared/protocol.js';
 import { MockClueAI } from '../server/ai/mock.js';
 import { createGameServer } from '../server/app.js';
+import { clueLibrarySaved } from '../server/words/clueLibrary.js';
+import { wordsFor } from '../server/words/wordBank.js';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { view: GameView | null };
+
+// Keep saved best clues out of the project folder.
+process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'cd-test-'));
 
 // Speed things up for tests.
 const cfg = CONFIG as unknown as { minBuildingScreenMs: number; reconnectWindowSeconds: number };
@@ -52,7 +60,7 @@ const emit = <R,>(c: Client, event: string, ...args: unknown[]) =>
   new Promise<R>((resolve) => (c.emit as (...a: unknown[]) => void)(event, ...args, resolve));
 
 /** Creates a room with two humans and gets both to the writing phase. */
-async function startGame(opts: { pool?: boolean } = {}) {
+async function startGame(opts: { pool?: boolean; theme?: Theme } = {}) {
   const a = client();
   const b = client();
   const created = await emit<{ ok: true; code: string; token: string }>(a, 'room:create', { name: 'Alice', difficulty: 'easy' });
@@ -65,6 +73,10 @@ async function startGame(opts: { pool?: boolean } = {}) {
     b.emit('lobby:timer-mode', 'pool'); // only the host may change it
     a.emit('lobby:timer-mode', 'pool');
     await until(() => b.view?.timerMode === 'pool');
+  }
+  if (opts.theme) {
+    a.emit('lobby:theme', opts.theme);
+    await until(() => b.view?.theme === opts.theme);
   }
   a.emit('lobby:ready', true);
   b.emit('lobby:ready', true);
@@ -206,6 +218,10 @@ describe('full game', () => {
     await until(() => a.view?.votes?.[rb!.id]);
     expect(a.view!.votes![rb!.id]!.clueIndex).toBe(goodIdx);
     expect(a.view!.votes![ra!.id]).toBeUndefined();
+    // The voted clue is saved for practice puzzles.
+    await clueLibrarySaved();
+    const saved = JSON.parse(readFileSync(join(process.env.DATA_DIR!, 'best-clues.json'), 'utf8')) as Record<string, string[]>;
+    expect(saved[aGrid.clues[goodIdx]!.answer]).toEqual([aGrid.clues[goodIdx]!.text]);
 
     // Rematch sends both back to the lobby, not ready.
     a.emit('game:rematch');
@@ -225,20 +241,20 @@ describe('full game', () => {
       emit<{ ok: true; result: { status: string } }>(c, 'write:next', { index, text, mode: 'check' });
 
     // A writes word 0, jumps to the last word, writes it, then comes back to revise word 0.
-    expect((await next(a, 0, 'Qzx first try')).result.status).toBe('advanced');
+    expect((await next(a, 0, 'Qzx qqa')).result.status).toBe('advanced');
     await until(() => a.view?.writing?.index === 1);
     a.emit('write:goto', n - 1);
     await until(() => a.view?.writing?.index === n - 1);
-    expect((await next(a, n - 1, 'Qzx last word')).result.status).toBe('advanced');
+    expect((await next(a, n - 1, 'Qzx qqb')).result.status).toBe('advanced');
     await until(() => a.view?.writing?.index === 1); // next unwritten word, wrapping round
     a.emit('write:goto', 0);
     await until(() => a.view?.writing?.index === 0);
-    expect(a.view!.writing!.draft).toBe('Qzx first try');
-    expect((await next(a, 0, 'Qzx revised')).result.status).toBe('advanced');
+    expect(a.view!.writing!.draft).toBe('Qzx qqa');
+    expect((await next(a, 0, 'Qzx qqc')).result.status).toBe('advanced');
     await until(() => a.view?.writing?.index === 1);
     for (let i = 1; i < n - 1; i++) {
       await until(() => a.view?.writing?.index === i);
-      await next(a, i, `Qzx word ${i}`);
+      await next(a, i, `Qzx qqw ${i}`);
     }
     await until(() => a.view?.writing?.done);
 
@@ -249,9 +265,15 @@ describe('full game', () => {
     }
     await until(() => b.view?.phase === 'solving');
     const clues = b.view!.solving!.puzzle.clues.map((c) => c.text);
-    expect(clues).toContain('Qzx revised');
-    expect(clues).not.toContain('Qzx first try');
+    expect(clues).toContain('Qzx qqc');
+    expect(clues).not.toContain('Qzx qqa');
   }, 20_000);
+
+  it('uses the theme the host picks', async () => {
+    const { a, b } = await startGame({ theme: 'animals' });
+    const animals = new Set(wordsFor('medium', 'animals'));
+    for (const c of [a, b]) for (const w of c.view!.writing!.words) expect(animals.has(w.answer)).toBe(true);
+  });
 
   it('ends immediately when a player resigns', async () => {
     const { a, b } = await startGame();
@@ -319,5 +341,29 @@ describe('practice', () => {
     const view = await res.json() as { clues: { text: string }[] };
     const scrambled = view.clues.filter((c) => c.text.startsWith('Unscramble:')).length;
     expect(scrambled).toBeLessThan(view.clues.length / 2);
+  });
+});
+
+describe('daily puzzle', () => {
+  const daily = (date: string) => fetch(`${url}/api/daily`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date }),
+  });
+  type Daily = { number: number; puzzle: { id: string; open: boolean[][]; clues: { text: string }[] } };
+
+  it('gives everyone the same puzzle for a date, and a new one the next day', async () => {
+    const [one, two, next] = (await Promise.all(['2026-09-28', '2026-09-28', '2026-09-29'].map(async (d) => (await daily(d)).json()))) as [Daily, Daily, Daily];
+    expect(one.number).toBe(1);
+    expect(one.puzzle.id).not.toBe(two.puzzle.id); // separate timers
+    expect(one.puzzle.open).toEqual(two.puzzle.open);
+    expect(one.puzzle.clues.map((c) => c.text)).toEqual(two.puzzle.clues.map((c) => c.text));
+    expect(next.puzzle.clues.map((c) => c.text)).not.toEqual(one.puzzle.clues.map((c) => c.text));
+  });
+
+  it('refuses dates before the first puzzle or far in the future', async () => {
+    expect((await daily('2026-01-01')).status).toBe(400);
+    expect((await daily('2999-01-01')).status).toBe(400);
+    expect((await daily('nonsense')).status).toBe(400);
   });
 });

@@ -1,7 +1,7 @@
 /** Connects browsers to game rooms over Socket.IO. */
 import { randomInt } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
-import { DIFFICULTIES, TIMER_MODES, type Difficulty, type TimerMode } from '../../shared/config.js';
+import { DIFFICULTIES, THEMES, TIMER_MODES, type Difficulty, type Theme, type TimerMode } from '../../shared/config.js';
 import type { ClientToServerEvents, Err, ServerToClientEvents } from '../../shared/protocol.js';
 import { validateName } from '../../shared/rules.js';
 import type { ClueAI } from '../ai/types.js';
@@ -109,6 +109,9 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI }) {
     }));
     socket.on('lobby:timer-mode', inRoom((r, p, m: TimerMode) => {
       if (TIMER_MODES.includes(m)) r.setTimerMode(p, m);
+    }));
+    socket.on('lobby:theme', inRoom((r, p, t: Theme) => {
+      if (THEMES.includes(t)) r.setTheme(p, t);
     }));
     socket.on('lobby:ready', inRoom((r, p, ready: boolean) => r.setReady(p, !!ready)));
 

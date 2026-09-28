@@ -23,6 +23,8 @@ export async function getServerConfig(): Promise<{ aiMode: string; bootId: strin
   }
 }
 
+export const createDaily = (date: string) => post<{ puzzle: PuzzleView; number: number; date: string }>('/api/daily', { date });
+
 export const createPractice = (difficulty: Difficulty) => post<PuzzleView>('/api/practice', { difficulty });
 
 export const checkPractice = (id: string, entries: Entries) => post<CheckResult>(`/api/practice/${id}/check`, { entries });

@@ -44,15 +44,6 @@ export const CONFIG = {
     reviewStrictness: 'lenient' as 'lenient' | 'strict',
   },
 
-  // ── Test-mode bot ─────────────────────────────────────────
-  bot: {
-    /** Seconds the bot takes per clue while writing (random in this range). */
-    writeSecondsMin: 1,
-    writeSecondsMax: 2.5,
-    /** Seconds per word the bot takes while solving, by speed setting. */
-    solveSecondsPerWord: { fast: 4, normal: 25, slow: 70 },
-  },
-
   // ── Player names ──────────────────────────────────────────
   nameMinLength: 1,
   nameMaxLength: 20,
@@ -105,6 +96,3 @@ export const CONFIG = {
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
-
-export type BotSpeed = 'fast' | 'normal' | 'slow';
-export const BOT_SPEEDS: readonly BotSpeed[] = ['fast', 'normal', 'slow'];

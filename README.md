@@ -34,11 +34,6 @@ Wait for `Local: http://localhost:5173/` and `Server running`, then open
 
 You don't need a second person to try everything:
 
-- **Play against the bot.** On the home page, under **Test mode**, pick a bot speed and click
-  **Play against a bot**. The bot writes simple clues (it always leaves one blank and writes one
-  deliberately bad clue, so you can see those rules work) and solves at the speed you picked.
-  During the game, the **Test tools** button (bottom-left) lets you make the bot disconnect,
-  reconnect, resign, or finish instantly.
 - **Play both sides yourself.** Create a game, copy the invite link, and paste it into a **new
   tab** (not "duplicate tab") or a private/incognito window. Each tab is a separate player.
 - **Use your phone.** Your phone must be on the same Wi-Fi. The terminal shows a line like
@@ -89,8 +84,6 @@ Every time new code is pushed to that branch, Render updates the site automatica
 **Good to know about the free plan:** the site "sleeps" after 15 minutes with no visitors, so
 the first visit afterwards takes 30–60 seconds to wake up. Games are kept in memory, so an
 update or restart ends games in progress. Render's paid plan (about $7/month) removes the sleep.
-To hide the bot test mode on your public site, set `DEV_TOOLS` to `0` in Render's
-**Environment** settings.
 
 ---
 
@@ -127,7 +120,7 @@ use its ‹ › arrows to change words, and **Clues** for the full list.
 
 Every adjustable number — words per grid, seconds per clue, character limit, hints per game,
 penalties, reconnect window, maximum solve time, grid size limits, AI models and review
-strictness, bot speeds — is in **`shared/config.ts`**, each with a comment.
+strictness — is in **`shared/config.ts`**, each with a comment.
 
 The word lists are plain text files (one word per line) in `server/words/`
 (`easy.txt`, `medium.txt`, `hard.txt`). After editing, run `npm run words:check`.
@@ -155,7 +148,7 @@ shared/          code used by both the server and the browser
   rules.ts       name and clue rules (e.g. "clue can't contain the answer")
   protocol.ts    the messages the server and browsers exchange
 server/          the game server (the source of truth for answers, timers and scores)
-  game/          game rooms, scoring, the test bot, real-time connections
+  game/          game rooms, scoring, real-time connections
   ai/            Anthropic API calls, pretend-AI mode, and the review instructions
   grid/          crossword generator and independent checker
   words/         word lists

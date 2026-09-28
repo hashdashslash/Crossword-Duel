@@ -13,12 +13,12 @@ import { checkPractice, createPractice } from './practice.js';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-export function createGameServer(opts: { ai: ClueAI; devTools: boolean }) {
+export function createGameServer(opts: { ai: ClueAI }) {
   const app = express();
   app.use(express.json({ limit: '100kb' }));
 
   app.get('/api/config', (_req, res) => {
-    res.json({ devTools: opts.devTools, aiMode: opts.ai.mode });
+    res.json({ aiMode: opts.ai.mode });
   });
 
   app.post('/api/practice', (req, res) => {

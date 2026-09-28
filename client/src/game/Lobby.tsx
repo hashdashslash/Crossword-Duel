@@ -116,7 +116,6 @@ function PlayerRow({ player, you }: { player: PlayerInfo; you?: boolean }) {
         {player.name}
         {you && <span className="muted"> (you)</span>}
         {player.isHost && <span className="tag">Host</span>}
-        {player.isBot && <span className="tag">Bot</span>}
       </span>
       <span className={`ready-state ${player.ready ? 'on' : ''}`}>
         {!player.connected ? 'Reconnecting…' : player.ready ? 'Ready' : 'Not ready'}

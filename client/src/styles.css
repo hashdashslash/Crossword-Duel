@@ -229,8 +229,6 @@ h1, h2 { margin: 0; }
 .wide { width: 100%; }
 .ghost.big { padding: 14px 20px; font-size: 1.05rem; }
 .back-link { position: absolute; top: 16px; left: 16px; }
-.test-panel { margin-top: 28px; border: 1px dashed #cfccc4; box-shadow: none; background: transparent; }
-.test-panel p { margin: 0; }
 .code-chip { display: inline-block; font-weight: 700; letter-spacing: 0.15em; background: var(--blue-soft); color: var(--blue-strong); padding: 2px 8px; border-radius: 6px; }
 .icon { padding: 7px 9px; line-height: 0; display: inline-flex; align-items: center; justify-content: center; }
 .tabular { font-variant-numeric: tabular-nums; }
@@ -401,14 +399,6 @@ h1, h2 { margin: 0; }
 .answer-list ol { list-style: none; padding: 0; margin: 0; }
 .answer-list li { display: flex; gap: 8px; padding: 5px 0; line-height: 1.35; font-size: 0.92rem; }
 .replaced { font-size: 0.84rem; color: var(--blue-strong); }
-
-/* Test tools */
-.dev-panel { position: fixed; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 20; font-size: 0.85rem; }
-.touch .dev-panel, body:has(.solve.touch) .dev-panel { bottom: auto; top: 70px; }
-.dev-toggle { border: 1px dashed #b9b5ab; background: var(--bg); border-radius: 999px; padding: 5px 12px; color: var(--muted); }
-.dev-body { margin-top: 8px; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); padding: 10px; display: flex; flex-direction: column; gap: 6px; width: 210px; }
-.dev-body button { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 6px 8px; text-align: left; }
-.dev-body button:disabled { opacity: 0.45; }
 
 @media (max-width: 520px) {
   .narrow h1 { font-size: 1.7rem; }

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { BOT_SPEEDS, CONFIG, type BotSpeed, type Difficulty } from '../../shared/config';
+import { useState } from 'react';
+import { CONFIG, type Difficulty } from '../../shared/config';
 import { validateName } from '../../shared/rules';
 import { DifficultyPicker } from './components/DifficultyPicker';
 import { Logo } from './components/ui';
@@ -9,14 +9,6 @@ import { navigate } from './lib/router';
 import { local, session } from './lib/storage';
 
 export const NAME_KEY = 'cd.name';
-
-export function useServerConfig() {
-  const [config, setConfig] = useState<{ devTools: boolean; aiMode: string } | null>(null);
-  useEffect(() => {
-    fetch('/api/config').then((r) => r.json()).then(setConfig).catch(() => setConfig({ devTools: false, aiMode: 'mock' }));
-  }, []);
-  return config;
-}
 
 export function NameField({ value, onChange, autoFocus }: { value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
   return (
@@ -40,17 +32,15 @@ export function Home() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [botSpeed, setBotSpeed] = useState<BotSpeed>('fast');
-  const config = useServerConfig();
 
-  const create = (bot: BotSpeed | null) => {
+  const create = () => {
     const check = validateName(name);
     if (!check.ok) return setError(check.error);
     setError('');
     setBusy(true);
     local.set(NAME_KEY, check.name);
     local.set('cd.difficulty', difficulty);
-    getSocket().emit('room:create', { name: check.name, difficulty, bot }, (res) => {
+    getSocket().emit('room:create', { name: check.name, difficulty }, (res) => {
       setBusy(false);
       if (!res.ok) return setError(res.error);
       session.set(tokenKey(res.code), res.token);
@@ -79,7 +69,7 @@ export function Home() {
             <span>Difficulty</span>
             <DifficultyPicker value={difficulty} onChange={setDifficulty} />
           </div>
-          <button className="primary big" onClick={() => create(null)} disabled={busy}>Create a game</button>
+          <button className="primary big" onClick={create} disabled={busy}>Create a game</button>
           <p className="muted small-print">You'll get a link to send to your opponent.</p>
         </div>
 
@@ -107,24 +97,6 @@ export function Home() {
           <button className="link" onClick={() => navigate('/practice')}>Practice solo</button>
           <HowToPlay />
         </div>
-
-        {config?.devTools && (
-          <div className="panel test-panel">
-            <strong>Test mode</strong>
-            <p className="muted">Play a full game against a bot. It writes simple clues (one left blank, one deliberately bad) and solves at the speed you pick.</p>
-            <div className="segmented" role="radiogroup" aria-label="Bot speed">
-              {BOT_SPEEDS.map((s) => (
-                <button key={s} role="radio" aria-checked={s === botSpeed} className={s === botSpeed ? 'on' : ''} onClick={() => setBotSpeed(s)}>
-                  {s === 'fast' ? 'Fast bot' : s === 'normal' ? 'Normal bot' : 'Slow bot'}
-                </button>
-              ))}
-            </div>
-            <button className="ghost wide" onClick={() => create(botSpeed)} disabled={busy}>Play against a bot</button>
-            {config.aiMode === 'mock' && (
-              <p className="muted small-print">AI is in pretend mode (no API key). Any clue containing the word “wrong” is treated as a bad clue.</p>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

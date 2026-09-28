@@ -6,7 +6,6 @@ import { NAME_KEY, NameField } from '../Home';
 import { navigate } from '../lib/router';
 import { local, session } from '../lib/storage';
 import { useNow } from '../lib/useNow';
-import { DevPanel } from './DevPanel';
 import { Lobby } from './Lobby';
 import { Reveal } from './Reveal';
 import { Solving } from './Solving';
@@ -69,12 +68,7 @@ export function GamePage({ code }: { code: string }) {
     screen = <Loading text="Loading…" />;
   }
 
-  return (
-    <>
-      {screen}
-      {view.devTools && view.players.some((p) => p.isBot) && <DevPanel view={view} socket={socket} />}
-    </>
-  );
+  return screen;
 }
 
 function OpponentReconnecting({ name, deadline }: { name: string; deadline: number }) {

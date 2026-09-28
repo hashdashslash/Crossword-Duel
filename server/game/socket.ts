@@ -1,7 +1,7 @@
 /** Connects browsers to game rooms over Socket.IO. */
 import { randomInt } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
-import { BOT_SPEEDS, DIFFICULTIES, type Difficulty } from '../../shared/config.js';
+import { DIFFICULTIES, type Difficulty } from '../../shared/config.js';
 import type { ClientToServerEvents, Err, ServerToClientEvents } from '../../shared/protocol.js';
 import { validateName } from '../../shared/rules.js';
 import type { ClueAI } from '../ai/types.js';
@@ -12,7 +12,7 @@ type Sock = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O (easily confused)
 
-export function attachGameServer(io: IO, opts: { ai: ClueAI; devTools: boolean }) {
+export function attachGameServer(io: IO, opts: { ai: ClueAI }) {
   const rooms = new Map<string, Room>();
 
   const newCode = () => {
@@ -26,7 +26,6 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; devTools: boolean }
     const code = newCode();
     const room = new Room(code, difficulty, {
       ai: opts.ai,
-      devTools: opts.devTools,
       send: (player: Player, view) => {
         for (const id of player.sockets) io.to(id).emit('state', view);
       },
@@ -75,11 +74,6 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; devTools: boolean }
       const difficulty = DIFFICULTIES.includes(p?.difficulty) ? p.difficulty : 'medium';
       const r = createRoom(difficulty);
       const me = r.addPlayer(name.name);
-      if (p?.bot) {
-        if (!opts.devTools) return ack(fail('Test mode is turned off on this server.'));
-        const speed = BOT_SPEEDS.includes(p.bot) ? p.bot : 'normal';
-        r.addPlayer('Test Bot', { isBot: true, botSpeed: speed });
-      }
       ack({ ok: true, code: r.code, token: me.token });
       bind(r, me);
     });
@@ -149,7 +143,6 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI; devTools: boolean }
     });
     socket.on('solve:resign', inRoom((r, p) => r.resign(p)));
     socket.on('game:rematch', inRoom((r, p) => r.rematch(p)));
-    socket.on('dev:bot', inRoom((r, p, action) => r.devBot(p, action)));
 
     socket.on('disconnect', () => {
       if (room && player) room.disconnect(player, socket.id);

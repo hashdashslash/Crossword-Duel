@@ -3,7 +3,7 @@
  * The server pushes one `state` message (a GameView) to each player whenever
  * anything changes; players send the actions below.
  */
-import type { BotSpeed, Difficulty } from './config.js';
+import type { Difficulty } from './config.js';
 import type { CellPos, Direction, PuzzleView } from './puzzle.js';
 
 export type Phase = 'lobby' | 'writing' | 'reviewing' | 'solving' | 'finished';
@@ -12,7 +12,6 @@ export interface PlayerInfo {
   id: string;
   name: string;
   isHost: boolean;
-  isBot: boolean;
   connected: boolean;
   ready: boolean;
   /** The player left the room for good. */
@@ -122,7 +121,6 @@ export interface GameView {
   you: string;
   players: PlayerInfo[];
   serverNow: number;
-  devTools: boolean;
   aiMode: 'anthropic' | 'mock';
   writing?: WritingView;
   solving?: SolvingView;
@@ -138,10 +136,8 @@ export type NextResult =
   | { status: 'invalid'; message: string }
   | { status: 'stale' };
 
-export type BotAction = 'disconnect' | 'reconnect' | 'resign' | 'finish';
-
 export interface ClientToServerEvents {
-  'room:create': (p: { name: string; difficulty: Difficulty; bot: BotSpeed | null }, ack: Ack<{ ok: true; code: string; token: string }>) => void;
+  'room:create': (p: { name: string; difficulty: Difficulty }, ack: Ack<{ ok: true; code: string; token: string }>) => void;
   'room:join': (p: { code: string; name: string }, ack: Ack<{ ok: true; token: string }>) => void;
   'room:rejoin': (p: { code: string; token: string }, ack: Ack<{ ok: true }>) => void;
   'room:leave': () => void;
@@ -156,7 +152,6 @@ export interface ClientToServerEvents {
   'solve:hint': (clueIndex: number, ack: Ack<{ ok: true; text: string }>) => void;
   'solve:resign': () => void;
   'game:rematch': () => void;
-  'dev:bot': (action: BotAction) => void;
 }
 
 export interface ServerToClientEvents {

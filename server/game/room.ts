@@ -4,16 +4,15 @@
  * only ever receive a GameView built for them (never the answers they solve).
  */
 import { randomUUID } from 'node:crypto';
-import { CONFIG, type BotSpeed, type Difficulty } from '../../shared/config.js';
+import { CONFIG, type Difficulty } from '../../shared/config.js';
 import type { CellPos, PuzzleView } from '../../shared/puzzle.js';
 import type {
-  BotAction, EndReason, FlaggedClue, GameResult, GameView, NextResult, Phase, PlayerInfo, RevealGrid,
+  EndReason, FlaggedClue, GameResult, GameView, NextResult, Phase, PlayerInfo, RevealGrid,
 } from '../../shared/protocol.js';
 import { cleanClue, clueContainsAnswer } from '../../shared/rules.js';
 import type { ClueAI, QuickCheckResult, ReviewItem, ReviewVerdict } from '../ai/types.js';
 import { withTimeout } from '../ai/types.js';
 import { generateGamePuzzles } from '../grid/puzzles.js';
-import { createRng, randomSeed, shuffle } from '../grid/rng.js';
 import type { Grid, PlacedWord } from '../grid/types.js';
 import { checkEntries } from '../solve/check.js';
 import { cannotWin, decideWinner, finalMs, type ScoreInput } from './scoring.js';
@@ -63,8 +62,6 @@ export interface Player {
   id: string;
   token: string;
   name: string;
-  isBot: boolean;
-  botSpeed: BotSpeed;
   sockets: Set<string>;
   connected: boolean;
   left: boolean;
@@ -77,7 +74,6 @@ export interface Player {
 
 export interface RoomDeps {
   ai: ClueAI;
-  devTools: boolean;
   /** Pushes a fresh GameView to one player's open connections. */
   send: (player: Player, view: GameView) => void;
 }
@@ -97,24 +93,21 @@ export class Room {
   private result?: GameResult;
   /** Bumped every new game so late async work from an old game is ignored. */
   private generation = 0;
-  private botTimers: NodeJS.Timeout[] = [];
 
   constructor(readonly code: string, public difficulty: Difficulty, private deps: RoomDeps) {}
 
   // ── Players & connections ─────────────────────────────────
 
-  addPlayer(name: string, opts: { isBot?: boolean; botSpeed?: BotSpeed } = {}): Player {
+  addPlayer(name: string): Player {
     const taken = this.players.some((p) => p.name.toLowerCase() === name.toLowerCase());
     const player: Player = {
       id: randomUUID(),
       token: randomUUID(),
       name: taken ? `${name} (2)` : name,
-      isBot: !!opts.isBot,
-      botSpeed: opts.botSpeed ?? 'normal',
       sockets: new Set(),
-      connected: !!opts.isBot,
+      connected: false,
       left: false,
-      ready: !!opts.isBot,
+      ready: false,
       reconnectDeadline: null,
     };
     this.players.push(player);
@@ -179,7 +172,7 @@ export class Room {
     if (this.phase === 'lobby' && this.players[0] !== p) {
       // A guest leaving the lobby frees the seat for someone else.
       this.players = this.players.filter((x) => x !== p);
-      for (const o of this.players) if (!o.isBot) o.ready = false;
+      for (const o of this.players) o.ready = false;
     } else {
       p.left = true;
     }
@@ -187,14 +180,12 @@ export class Room {
   }
 
   isDead(now: number): boolean {
-    const humans = this.players.filter((p) => !p.isBot);
-    const nobodyHere = humans.every((p) => !p.connected);
+    const nobodyHere = this.players.every((p) => !p.connected);
     return (nobodyHere && now - this.lastActivity > 30 * 60_000) || now - this.lastActivity > 3 * 3600_000;
   }
 
   dispose() {
     clearInterval(this.tickTimer);
-    this.clearBotTimers();
     for (const p of this.players) {
       clearTimeout(p.reconnectTimer);
       clearTimeout(p.writing?.timer);
@@ -206,7 +197,7 @@ export class Room {
   setDifficulty(p: Player, d: Difficulty) {
     if (this.phase !== 'lobby' || this.players[0] !== p) return;
     this.difficulty = d;
-    for (const o of this.players) if (!o.isBot) o.ready = false;
+    for (const o of this.players) o.ready = false;
     this.touch();
     this.broadcast();
   }
@@ -246,7 +237,6 @@ export class Room {
       };
       const w = p.writing;
       w.timer = setTimeout(() => { if (gen === this.generation) this.introDone(p); }, CONFIG.writingIntroSeconds * 1000);
-      if (p.isBot) this.botWrite(p);
     });
     this.touch();
     this.broadcast();
@@ -580,12 +570,10 @@ export class Room {
     return grid.words.filter((w) => wordCells(w).every(([r, c]) => !!p.solving!.entries[r]![c])).length;
   }
 
-  /** Checks end conditions and drives the bot. Runs twice a second while solving. */
+  /** Checks end conditions. Runs twice a second while solving. */
   private tick() {
     if (this.phase !== 'solving') return;
     const now = Date.now();
-    for (const p of this.players) if (p.isBot && p.connected) this.botSolveStep(p, now);
-
     const [a, b] = this.players.map((p) => this.scoreInput(p)) as [ScoreInput, ScoreInput];
     if (a.finishedAt !== null && b.finishedAt !== null) return this.finish('completed', null);
     if (a.finishedAt !== null && cannotWin(a, b, this.solveStartedAt, now)) return this.finish('impossible', null);
@@ -598,7 +586,6 @@ export class Room {
   private finish(reason: EndReason, endedBy: Player | null) {
     if (this.phase === 'finished') return;
     clearInterval(this.tickTimer);
-    this.clearBotTimers();
     for (const p of this.players) clearTimeout(p.writing?.timer);
     this.generation++; // cancel any in-flight AI work for this game
     this.phase = 'finished';
@@ -682,87 +669,12 @@ export class Room {
     this.solveStartedAt = 0;
     this.result = undefined;
     for (const x of this.players) {
-      x.ready = x.isBot;
+      x.ready = false;
       x.writing = undefined;
       x.solving = undefined;
     }
     this.touch();
     this.broadcast();
-  }
-
-  // ── Test-mode bot ─────────────────────────────────────────
-
-  private clearBotTimers() {
-    this.botTimers.forEach(clearTimeout);
-    this.botTimers = [];
-  }
-
-  private botWrite(p: Player) {
-    const gen = this.generation;
-    const w = p.writing!;
-    w.introDone = true;
-    clearTimeout(w.timer);
-    const rng = createRng(randomSeed());
-    const writeOne = () => {
-      if (gen !== this.generation || this.phase !== 'writing' || !p.connected) return;
-      const slot = w.slots[w.index];
-      if (!slot) return;
-      // Mostly fair clues, one blank and one deliberately bad clue to exercise the rules.
-      const text = w.index === 3 ? '' : w.index === 7 ? 'A deliberately wrong clue about cheese' : `Unscramble: ${scramble(slot.answer, rng)}`;
-      this.submitClue(p, text);
-      if (w.index < w.slots.length) schedule();
-    };
-    const schedule = () => {
-      const { writeSecondsMin: lo, writeSecondsMax: hi } = CONFIG.bot;
-      this.botTimers.push(setTimeout(writeOne, (lo + rng() * (hi - lo)) * 1000));
-    };
-    this.startWordTimer(p);
-    schedule();
-  }
-
-  private botSolveStep(p: Player, now: number, all = false) {
-    const s = p.solving;
-    if (!s || s.finishedAt !== null) return;
-    const grid = this.grids![this.solveGridIndex(p)]!;
-    const perWord = CONFIG.bot.solveSecondsPerWord[p.botSpeed] * 1000;
-    const target = all ? grid.words.length : Math.floor((now - this.solveStartedAt) / perWord);
-    const before = this.filledCount(p);
-    grid.words.slice(0, target).forEach((w) => {
-      for (const [r, c] of wordCells(w)) s.entries[r]![c] = grid.cells[r]![c]!;
-    });
-    if (this.filledCount(p) === before) return;
-    const { blanks, wrong } = checkEntries(grid, s.entries);
-    if (!blanks.length && !wrong.length) s.finishedAt = now;
-    this.broadcast();
-  }
-
-  devBot(requester: Player, action: BotAction) {
-    if (!this.deps.devTools) return;
-    const bot = this.players.find((x) => x.isBot);
-    if (!bot || bot === requester) return;
-    switch (action) {
-      case 'disconnect':
-        if (bot.connected) this.markDisconnected(bot);
-        break;
-      case 'reconnect':
-        if (!bot.left) {
-          bot.connected = true;
-          bot.reconnectDeadline = null;
-          clearTimeout(bot.reconnectTimer);
-          if (this.phase === 'writing' && bot.writing && bot.writing.index < bot.writing.slots.length) this.botWrite(bot);
-          this.broadcast();
-        }
-        break;
-      case 'resign':
-        this.resign(bot);
-        break;
-      case 'finish':
-        if (this.phase === 'solving') {
-          this.botSolveStep(bot, Date.now(), true);
-          this.tick();
-        }
-        break;
-    }
   }
 
   // ── Views ─────────────────────────────────────────────────
@@ -784,11 +696,10 @@ export class Room {
       difficulty: this.difficulty,
       you: p.id,
       players: this.players.map((x, i): PlayerInfo => ({
-        id: x.id, name: x.name, isHost: i === 0, isBot: x.isBot, connected: x.connected, ready: x.ready,
+        id: x.id, name: x.name, isHost: i === 0, connected: x.connected, ready: x.ready,
         left: x.left, reconnectDeadline: x.reconnectDeadline,
       })),
       serverNow: now,
-      devTools: this.deps.devTools,
       aiMode: this.deps.ai.mode,
     };
 
@@ -844,14 +755,6 @@ function writingOrder(grid: Grid): number[] {
   const idx = grid.words.map((w, i) => ({ w, i }));
   const by = (dir: 'across' | 'down') => idx.filter((x) => x.w.direction === dir).sort((a, b) => a.w.number - b.w.number).map((x) => x.i);
   return [...by('across'), ...by('down')];
-}
-
-function scramble(answer: string, rng: () => number): string {
-  for (let i = 0; i < 10; i++) {
-    const s = shuffle([...answer], rng).join('');
-    if (s !== answer) return s;
-  }
-  return [...answer].reverse().join('');
 }
 
 /** Last-resort replacement if the AI can't produce one. */

@@ -10,5 +10,3 @@ services:
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false # you paste the key into Render's dashboard; it is never stored in GitHub
-      - key: DEV_TOOLS
-        value: "1"

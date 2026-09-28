@@ -13,13 +13,11 @@ import { createGameServer } from '../server/app.js';
 type Client = Socket<ServerToClientEvents, ClientToServerEvents> & { view: GameView | null };
 
 // Speed things up for tests.
-const cfg = CONFIG as unknown as { minBuildingScreenMs: number; reconnectWindowSeconds: number; bot: { writeSecondsMin: number; writeSecondsMax: number } };
+const cfg = CONFIG as unknown as { minBuildingScreenMs: number; reconnectWindowSeconds: number };
 cfg.minBuildingScreenMs = 0;
-cfg.bot.writeSecondsMin = 0.01;
-cfg.bot.writeSecondsMax = 0.02;
 
 let url = '';
-const server = createGameServer({ ai: new MockClueAI(), devTools: true });
+const server = createGameServer({ ai: new MockClueAI() });
 const clients: Client[] = [];
 
 beforeAll(async () => {
@@ -57,7 +55,7 @@ const emit = <R,>(c: Client, event: string, ...args: unknown[]) =>
 async function startGame() {
   const a = client();
   const b = client();
-  const created = await emit<{ ok: true; code: string; token: string }>(a, 'room:create', { name: 'Alice', difficulty: 'easy', bot: null });
+  const created = await emit<{ ok: true; code: string; token: string }>(a, 'room:create', { name: 'Alice', difficulty: 'easy' });
   expect(created.ok).toBe(true);
   const joined = await emit<{ ok: boolean }>(b, 'room:join', { code: created.code, name: 'alice' });
   expect(joined.ok).toBe(true);
@@ -232,26 +230,4 @@ describe('full game', () => {
       cfg.reconnectWindowSeconds = 60;
     }
   }, 15_000);
-
-  it('plays against the test bot', async () => {
-    const a = client();
-    const created = await emit<{ ok: true; code: string }>(a, 'room:create', { name: 'Solo', difficulty: 'medium', bot: 'fast' });
-    expect(created.ok).toBe(true);
-    await until(() => a.view?.players.length === 2);
-    a.emit('lobby:ready', true);
-    await until(() => a.view?.phase === 'writing');
-    await writeAll(a);
-    await until(() => a.view?.phase === 'solving', 10_000);
-    // The bot left one clue blank and wrote one bad clue.
-    expect(a.view!.solving!.puzzle.clues.filter((c) => c.prefilled).length).toBe(1);
-    a.emit('dev:bot', 'finish');
-    // The bot has a +60s penalty for its bad clue, so the game waits for the human.
-    await until(() => a.view?.solving?.opponentFinished);
-    expect(a.view!.phase).toBe('solving');
-    a.emit('solve:resign');
-    await until(() => a.view?.phase === 'finished');
-    const bot = a.view!.result!.players[1]!;
-    expect(bot.rawMs).not.toBeNull();
-    expect(bot.flagged.length).toBe(1);
-  }, 20_000);
 });

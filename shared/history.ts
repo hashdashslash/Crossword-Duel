@@ -24,8 +24,8 @@ export interface SavedGame {
   result: GameResult;
   finishedAt: string;
   meta: GameMeta;
-  /** The viewer's player id in `result`. */
-  you: string;
+  /** The viewer's player id in `result` (null when viewing a shared link to someone else's game). */
+  you: string | null;
   /** Account usernames by seat (null for guests). */
   usernames: (string | null)[];
 }

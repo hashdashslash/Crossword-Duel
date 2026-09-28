@@ -25,6 +25,8 @@ function page(path: string) {
   if (path === '/friends') return <FriendsPage />;
   const review = path.match(/^\/games\/([\w-]+)\/?$/);
   if (review) return <GameReviewPage key={review[1]} id={review[1]!} />;
+  const sharedResult = path.match(/^\/r\/([\w-]+)\/?$/);
+  if (sharedResult) return <GameReviewPage key={`r-${sharedResult[1]}`} id={sharedResult[1]!} shared />;
   const profile = path.match(/^\/u\/([A-Za-z0-9_]+)\/?$/);
   if (profile) return <ProfilePage key={profile[1]} username={profile[1]!} />;
   if (path === '/signin' || path === '/signup') return <Account key={path} mode={path === '/signup' ? 'signup' : 'signin'} />;

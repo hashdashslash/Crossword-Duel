@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { THEME_LABELS } from '../../shared/config';
 import type { HistoryEntry, Profile as ProfileData, SavedGame } from '../../shared/history';
-import { getHistory, getProfile, getSavedGame } from './api';
+import { getHistory, getProfile, getSavedGame, getSharedGame } from './api';
 import { LABELS } from './components/DifficultyPicker';
 import { Loading, Logo } from './components/ui';
-import { Final, SolvedGrid } from './game/Reveal';
+import { Final, ShareButtons, SolvedGrid } from './game/Reveal';
+import { resultHeadline } from './lib/shareImage';
 import { useAuth } from './lib/auth';
 import { navigate } from './lib/router';
 import { formatTime } from './solve/Timer';
@@ -78,14 +79,15 @@ export function HistoryPage() {
   );
 }
 
-export function GameReviewPage({ id }: { id: string }) {
+/** A saved game's full review: /games/:id for players in it, or /r/:id (shared) for anyone with the link. */
+export function GameReviewPage({ id, shared = false }: { id: string; shared?: boolean }) {
   const { loaded, user } = useAuth();
   const [game, setGame] = useState<SavedGame | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     if (!loaded) return;
-    getSavedGame(id).then(setGame).catch((e: Error) => setError(e.message));
-  }, [id, loaded, user?.id]);
+    (shared ? getSharedGame(id) : getSavedGame(id)).then(setGame).catch((e: Error) => setError(e.message));
+  }, [id, shared, loaded, user?.id]);
 
   if (error) {
     return (
@@ -97,21 +99,27 @@ export function GameReviewPage({ id }: { id: string }) {
   }
   if (!game) return <Loading text="Loading game…" />;
   const { result } = game;
-  const me = result.players.find((p) => p.id === game.you)!;
+  const me = result.players.find((p) => p.id === game.you);
   const opp = result.players.find((p) => p.id !== game.you)!;
-  const outcome = result.winnerId === null ? 'draw' : result.winnerId === me.id ? 'win' : 'loss';
+  const outcome = result.winnerId === null ? 'draw' : result.winnerId === me?.id ? 'win' : 'loss';
+  const headline = resultHeadline(result);
   return (
     <div className="reveal grids-view">
       <header className="reveal-header review-header">
-        <BackBar />
-        <h1>{OUTCOME[outcome]} vs {opp.name}</h1>
+        {shared && !me ? <span /> : <BackBar />}
+        <h1>{me ? `${OUTCOME[outcome]} vs ${opp.name}` : headline.title}</h1>
         <span />
       </header>
+      {!me && headline.sub && <p className="center verdict-sub">{headline.sub}</p>}
       <p className="muted center">
         {dateLabel(game.finishedAt)} · {LABELS[game.meta.difficulty]}{game.meta.theme !== 'any' ? ` · ${THEME_LABELS[game.meta.theme]}` : ''}
         {' · '}{game.meta.timerMode === 'pool' ? 'Shared clock' : 'Per-word timer'}
       </p>
       <ScoreSummary game={game} />
+      <div className="reveal-actions">
+        {shared && !me && <button className="primary" onClick={() => navigate('/')}>Play Crossword Duel</button>}
+        <ShareButtons result={result} you={game.you} saved />
+      </div>
       <div className="grids-pair">
         {result.grids.map((g, i) => <SolvedGrid key={i} grid={g} />)}
       </div>

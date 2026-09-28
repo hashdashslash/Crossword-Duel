@@ -77,8 +77,11 @@ export class History {
     }));
   }
 
-  /** One saved game, for a player who was in it. */
-  async get(gameId: string, userId: string | null): Promise<SavedGame | null> {
+  /**
+   * One saved game. Private: only for a player who was in it. Shared: anyone
+   * with the link (game ids are random and only ever sent to the two players).
+   */
+  async get(gameId: string, userId: string | null, shared = false): Promise<SavedGame | null> {
     const { rows } = await this.db.query<{ result: GameResult | string; finished_at: string | Date; difficulty: string; theme: string; timer_mode: string }>(
       'SELECT result, finished_at, difficulty, theme, timer_mode FROM games WHERE id = $1',
       [gameId],
@@ -90,12 +93,12 @@ export class History {
       [gameId],
     );
     const mine = seats.find((s) => userId && s.user_id === userId);
-    if (!mine) return null;
+    if (!mine && !shared) return null;
     return {
       result: typeof g.result === 'string' ? JSON.parse(g.result) : g.result,
       finishedAt: new Date(g.finished_at).toISOString(),
       meta: { difficulty: g.difficulty as GameMeta['difficulty'], theme: g.theme as GameMeta['theme'], timerMode: g.timer_mode as GameMeta['timerMode'] },
-      you: mine.player_id,
+      you: mine?.player_id ?? null,
       usernames: seats.map((s) => s.username),
     };
   }
@@ -167,6 +170,16 @@ export function attachHistoryRoutes(app: Express, accounts: Accounts | null, his
     const game = await history!.get(String(req.params.id), user?.id ?? null);
     if (!game) {
       res.status(404).json({ error: user ? "We couldn't find that game." : 'Sign in to see this game.' });
+      return;
+    }
+    res.json(game);
+  }));
+
+  // Shared results link (/r/<id>): anyone with the link can view it, signed in or not.
+  app.get('/api/results/:id', handle(async (req, res, user) => {
+    const game = await history!.get(String(req.params.id).slice(0, 64), user?.id ?? null, true);
+    if (!game) {
+      res.status(404).json({ error: "We couldn't find that game." });
       return;
     }
     res.json(game);

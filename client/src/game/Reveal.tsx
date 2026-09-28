@@ -4,6 +4,8 @@ import type { BestClueVote, GameResult, GameView, PlayerResult, RevealClue, Reve
 import { MuteButton } from '../components/ui';
 import { describeRecord, useHeadToHead } from '../lib/record';
 import { sfx } from '../lib/sound';
+import { useAuth } from '../lib/auth';
+import { resultHeadline, shareResultImage } from '../lib/shareImage';
 import { formatTime } from '../solve/Timer';
 
 interface Props {
@@ -146,7 +148,7 @@ export function Reveal({ result, view, onRematch, onHome, onVote }: Props) {
 
       {step >= 5 && (
         <div className="reveal-actions">
-          <ShareButton result={result} you={view.you} />
+          <RevealShare result={result} view={view} />
           <button className="ghost" onClick={() => setShowGrids(true)}>View both grids</button>
           <button className="primary" onClick={onRematch} disabled={oppLeft}>Rematch</button>
           <button className="ghost" onClick={onHome}>Home</button>
@@ -171,8 +173,13 @@ function HeadToHead({ result, view }: { result: GameResult; view: GameView }) {
 
 // ── Share ───────────────────────────────────────────────
 
-/** A short, spoiler-free summary for group chats. */
-export function shareText(result: GameResult, you: string, origin: string): string {
+/** A short, spoiler-free summary for group chats. `you` is null for someone who wasn't in the game. */
+export function shareText(result: GameResult, you: string | null, origin: string): string {
+  if (you === null) {
+    const { title, sub } = resultHeadline(result);
+    const time = (p: PlayerResult) => (p.finalMs !== null ? formatTime(p.finalMs) : 'DNF');
+    return [`Crossword Duel: ${title}${sub ? ` (${sub})` : ''}`, result.players.map((p) => `${p.name} ${time(p)}`).join(' · '), origin].join('\n');
+  }
   const me = result.players.find((p) => p.id === you)!;
   const opp = result.players.find((p) => p.id !== you)!;
   const time = (p: PlayerResult) => (p.finalMs !== null ? formatTime(p.finalMs) : 'DNF');
@@ -192,10 +199,34 @@ export function shareText(result: GameResult, you: string, origin: string): stri
   ].join('\n');
 }
 
-function ShareButton({ result, you }: { result: GameResult; you: string }) {
+/**
+ * "Share result" (text, with a link to the results page when the game was saved)
+ * and "Share image" (a picture made in the browser, so it works for guests too).
+ */
+export function ShareButtons({ result, you, saved }: { result: GameResult; you: string | null; saved: boolean }) {
+  const [imageNote, setImageNote] = useState('');
+  const link = saved ? `${location.origin}/r/${result.id}` : location.origin;
+  const image = async () => {
+    try {
+      const how = await shareResultImage(result, `Play at ${location.host}`);
+      setImageNote(how === 'downloaded' ? 'Image saved to your downloads.' : '');
+    } catch {
+      setImageNote("Couldn't make the image on this device.");
+    }
+  };
+  return (
+    <>
+      <ShareButton result={result} you={you} url={link} />
+      <button className="ghost" onClick={image}>Share image</button>
+      {imageNote && <p className="muted small-print center" role="status">{imageNote}</p>}
+    </>
+  );
+}
+
+function ShareButton({ result, you, url }: { result: GameResult; you: string | null; url: string }) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
-    const text = shareText(result, you, location.origin);
+    const text = shareText(result, you, url);
     if ('share' in navigator) {
       try {
         await navigator.share({ text });
@@ -213,6 +244,13 @@ function ShareButton({ result, you }: { result: GameResult; you: string }) {
     }
   };
   return <button className="ghost" onClick={share}>{copied ? 'Copied!' : 'Share result'}</button>;
+}
+
+/** On the results screen, a link is offered when the game is saved (at least one player signed in). */
+function RevealShare({ result, view }: { result: GameResult; view: GameView }) {
+  const { enabled } = useAuth();
+  const saved = enabled && view.players.some((p) => p.username);
+  return <ShareButtons result={result} you={view.you} saved={saved} />;
 }
 
 // ── Best clue vote ──────────────────────────────────────

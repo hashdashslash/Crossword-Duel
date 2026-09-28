@@ -109,6 +109,15 @@ describe('game history', () => {
     expect((await call(`/api/games/${id}`)).status).toBe(404);
     expect((await call('/api/history')).status).toBe(401);
 
+    // A shared results link works for anyone, and knows when the viewer played in it.
+    const shared = await call(`/api/results/${id}`);
+    expect(shared.status).toBe(200);
+    expect(shared.body.you).toBeNull();
+    expect(shared.body.result.id).toBe(id);
+    expect((await call(`/api/results/${id}`, eve)).body.you).toBeNull();
+    expect((await call(`/api/results/${id}`, ann)).body.you).toBe(review.body.you);
+    expect((await call('/api/results/not-a-real-game')).status).toBe(404);
+
     // Two accounts: both get it, and the loser sees a loss.
     const id2 = await playResignedGame(ann, bob);
     const bobs = await until(async () => {

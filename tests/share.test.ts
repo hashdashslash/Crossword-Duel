@@ -17,6 +17,12 @@ const result = (winnerId: string | null, over: Partial<GameResult> = {}): GameRe
 });
 
 describe('share text', () => {
+  it('is written in the third person for a shared link', () => {
+    const text = shareText(result('b', { reason: 'resign', endedBy: 'a' }), null, 'https://example.com/r/g1');
+    expect(text.split('\n')).toEqual(['Crossword Duel: Sam beat Ann (Ann resigned)', 'Ann 5:00 · Sam 6:42', 'https://example.com/r/g1']);
+    expect(shareText(result(null), null, 'x').split('\n')[0]).toBe('Crossword Duel: Ann and Sam drew (Dead heat)');
+  });
+
   it('says who won and by how much', () => {
     const text = shareText(result('a'), 'a', 'https://example.com');
     expect(text.split('\n')[0]).toBe('Crossword Duel: Beat Sam by 1:42 🏆');

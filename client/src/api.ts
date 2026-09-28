@@ -33,6 +33,7 @@ async function get<T>(url: string): Promise<T> {
 
 export const getHistory = (before?: string) => get<{ games: HistoryEntry[] }>(`/api/history${before ? `?before=${encodeURIComponent(before)}` : ''}`);
 export const getSavedGame = (id: string) => get<SavedGame>(`/api/games/${encodeURIComponent(id)}`);
+export const getSharedGame = (id: string) => get<SavedGame>(`/api/results/${encodeURIComponent(id)}`);
 export const getProfile = (username: string) => get<Profile>(`/api/profile/${encodeURIComponent(username)}`);
 
 export const createDaily = (date: string) => post<{ puzzle: PuzzleView; number: number; date: string }>('/api/daily', { date });

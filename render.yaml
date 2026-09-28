@@ -8,5 +8,19 @@ services:
     startCommand: npm start
     healthCheckPath: /api/config
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: ANTHROPIC_API_KEY
         sync: false # you paste the key into Render's dashboard; it is never stored in GitHub
+      - key: DATABASE_URL
+        fromDatabase:
+          name: crossword-duel-db
+          property: connectionString
+
+# Accounts, game history and friends live here. Render's free database is deleted
+# after 30 days, so this uses the smallest paid plan (about $6/month).
+databases:
+  - name: crossword-duel-db
+    plan: 0.1c-256mb
+    databaseName: crossword_duel
+    user: crossword_duel

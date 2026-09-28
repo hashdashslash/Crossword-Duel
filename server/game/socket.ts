@@ -5,6 +5,8 @@ import { DIFFICULTIES, THEMES, TIMER_MODES, type Difficulty, type Theme, type Ti
 import type { ClientToServerEvents, Err, ServerToClientEvents } from '../../shared/protocol.js';
 import { validateName } from '../../shared/rules.js';
 import type { ClueAI } from '../ai/types.js';
+import type { Accounts } from '../accounts/accounts.js';
+import type { PublicUser } from '../../shared/account.js';
 import { Room, type Player } from './room.js';
 
 type IO = Server<ClientToServerEvents, ServerToClientEvents>;
@@ -12,7 +14,7 @@ type Sock = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O (easily confused)
 
-export function attachGameServer(io: IO, opts: { ai: ClueAI }) {
+export function attachGameServer(io: IO, opts: { ai: ClueAI; accounts?: Accounts | null }) {
   const rooms = new Map<string, Room>();
 
   const newCode = () => {
@@ -47,7 +49,16 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI }) {
 
   const fail = (error: string): Err => ({ ok: false, error });
 
+  // Signed-in players are recognised from their session cookie when they connect.
+  io.use((socket, next) => {
+    if (!opts.accounts) return next();
+    opts.accounts.userFromCookie(socket.handshake.headers.cookie)
+      .then((user) => { socket.data.user = user; next(); })
+      .catch(() => next());
+  });
+
   io.on('connection', (socket: Sock) => {
+    const user = (socket.data.user ?? null) as PublicUser | null;
     let room: Room | null = null;
     let player: Player | null = null;
 
@@ -69,11 +80,11 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI }) {
     };
 
     socket.on('room:create', (p, ack) => {
-      const name = validateName(p?.name);
+      const name = validateName(user?.username ?? p?.name);
       if (!name.ok) return ack(fail(name.error));
       const difficulty = DIFFICULTIES.includes(p?.difficulty) ? p.difficulty : 'medium';
       const r = createRoom(difficulty);
-      const me = r.addPlayer(name.name);
+      const me = r.addPlayer(name.name, user?.id);
       ack({ ok: true, code: r.code, token: me.token });
       bind(r, me);
     });
@@ -83,9 +94,10 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI }) {
       if (!r) return ack(fail("We couldn't find that game. Check the link or code."));
       const blocked = r.canJoin();
       if (blocked) return ack(fail(blocked));
-      const name = validateName(p?.name);
+      if (user && r.players.some((x) => x.userId === user.id && !x.left)) return ack(fail("You're already in this game on another tab or device."));
+      const name = validateName(user?.username ?? p?.name);
       if (!name.ok) return ack(fail(name.error));
-      const me = r.addPlayer(name.name);
+      const me = r.addPlayer(name.name, user?.id);
       ack({ ok: true, token: me.token });
       bind(r, me);
     });

@@ -9,11 +9,22 @@ import { tokenKey } from './game/useGame';
 import { navigate } from './lib/router';
 import { dailyNumber } from '../../shared/daily';
 import { dailyResult, localDate } from './lib/daily';
+import { AccountBar } from './Account';
+import { useAuth } from './lib/auth';
 import { local, session } from './lib/storage';
 
 export const NAME_KEY = 'cd.name';
 
 export function NameField({ value, onChange, autoFocus }: { value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
+  const { user } = useAuth();
+  if (user) {
+    return (
+      <div className="field">
+        <span>Playing as</span>
+        <p className="difficulty-read">{user.username}</p>
+      </div>
+    );
+  }
   return (
     <label className="field">
       <span>Your name</span>
@@ -37,13 +48,14 @@ export function Home() {
   const [busy, setBusy] = useState(false);
   const [intro, setIntro] = useState(shouldShowIntro);
   const [rules, setRules] = useState(false);
+  const { user } = useAuth();
 
   const create = () => {
-    const check = validateName(name);
+    const check = validateName(user?.username ?? name);
     if (!check.ok) return setError(check.error);
     setError('');
     setBusy(true);
-    local.set(NAME_KEY, check.name);
+    if (!user) local.set(NAME_KEY, check.name);
     local.set('cd.difficulty', difficulty);
     getSocket().emit('room:create', { name: check.name, difficulty }, (res) => {
       setBusy(false);
@@ -57,13 +69,14 @@ export function Home() {
     const clean = code.trim().toUpperCase().replace(/[^A-Z]/g, '');
     if (clean.length !== 4) return setError('Game codes are 4 letters.');
     const check = validateName(name);
-    if (check.ok) local.set(NAME_KEY, check.name);
+    if (check.ok && !user) local.set(NAME_KEY, check.name);
     navigate(`/g/${clean}`);
   };
 
   return (
     <div className="page-center">
       <div className="narrow">
+        <AccountBar />
         <Logo />
         <h1>Crossword Duel</h1>
         <p className="tagline">Write clues. Swap puzzles. Race to solve.</p>

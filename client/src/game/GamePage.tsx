@@ -6,6 +6,8 @@ import { HowToPlayButton, IntroPopup, RulesModal, shouldShowIntro } from '../com
 import { Loading, Logo } from '../components/ui';
 import { NAME_KEY, NameField } from '../Home';
 import { navigate } from '../lib/router';
+import { AccountBar } from '../Account';
+import { useAuth } from '../lib/auth';
 import { recordResult } from '../lib/record';
 import { local, session } from '../lib/storage';
 import { useNow } from '../lib/useNow';
@@ -106,11 +108,12 @@ function JoinForm({ code, join }: { code: string; join: (name: string) => Promis
   const [busy, setBusy] = useState(false);
   const [intro, setIntro] = useState(shouldShowIntro);
   const [rules, setRules] = useState(false);
+  const { user } = useAuth();
   const submit = async () => {
-    const check = validateName(name);
+    const check = validateName(user?.username ?? name);
     if (!check.ok) return setError(check.error);
     setBusy(true);
-    local.set(NAME_KEY, check.name);
+    if (!user) local.set(NAME_KEY, check.name);
     const err = await join(check.name);
     setBusy(false);
     if (err) setError(err);
@@ -118,6 +121,7 @@ function JoinForm({ code, join }: { code: string; join: (name: string) => Promis
   return (
     <div className="page-center">
       <div className="narrow">
+        <AccountBar />
         <Logo />
         <h1>You're invited</h1>
         <p className="tagline">Join game <span className="code-chip">{code}</span> on Crossword Duel.</p>

@@ -96,6 +96,26 @@ notice, then a "the server restarted" page with a button to start a new game. Re
 
 ---
 
+### Accounts database (optional)
+
+Guest play needs nothing extra. **Accounts** (sign-up, game history, friends) need a Postgres
+database, because Render wipes the server's own files on every update.
+
+- **New setup:** the Blueprint (`render.yaml`) already creates one: `crossword-duel-db`, on the
+  smallest paid plan (about $6/month; Render's free database is deleted after 30 days).
+- **Existing site:** in Render, open **Blueprints**, pick this blueprint, and click **Manual sync**
+  (or **Sync**). Render shows it will create `crossword-duel-db` and add `DATABASE_URL` to the
+  web service. Approve it. The tables are created automatically when the server starts.
+- **Check it:** the **Logs** tab says `Accounts: on (Postgres).` If it says `Accounts: off`, the
+  game still works, but sign-in links are hidden.
+- **On your computer** nothing is needed: `npm run dev` uses a built-in database stored in
+  `data/pglite`.
+
+Passwords are stored as salted scrypt hashes. Failed sign-ins are limited to 5 per email and 20
+per network address every 15 minutes. There is no "forgot password" email yet.
+
+---
+
 ## 5. How a game works
 
 1. **Lobby** — enter a name, create a game, send the invite link (or 4-letter code). The host

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { getServerConfig } from '../api';
 import type { GameResult, GameView } from '../../../shared/protocol';
 import { validateName } from '../../../shared/rules';
 import { Loading, Logo } from '../components/ui';
 import { NAME_KEY, NameField } from '../Home';
 import { navigate } from '../lib/router';
+import { recordResult } from '../lib/record';
 import { local, session } from '../lib/storage';
 import { useNow } from '../lib/useNow';
 import { Lobby } from './Lobby';
@@ -19,8 +21,19 @@ export function GamePage({ code }: { code: string }) {
   const [shownResult, setShownResult] = useState<GameResult | null>(null);
 
   useEffect(() => {
-    if (view?.phase === 'finished' && view.result) setShownResult(view.result);
-  }, [view?.phase, view?.result]);
+    if (view?.phase === 'finished' && view.result) {
+      setShownResult(view.result);
+      recordResult(view.result, view.you);
+    }
+  }, [view?.phase, view?.result, view?.you]);
+
+  // The free hosting plan sleeps after 15 minutes without web requests, which
+  // would end this game. A tiny request every few minutes keeps it awake.
+  useEffect(() => {
+    if (status !== 'online') return;
+    const id = setInterval(() => void getServerConfig(), KEEP_AWAKE_MS);
+    return () => clearInterval(id);
+  }, [status]);
 
   const leave = () => {
     socket.emit('room:leave');
@@ -29,14 +42,16 @@ export function GamePage({ code }: { code: string }) {
   };
 
   if (status === 'needs-join') return <JoinForm code={code} join={game.join} />;
-  if (status === 'gone') return <Gone message={game.error} />;
+  if (status === 'gone') return <Gone message={game.error} restarted={game.restarted} />;
   if (!view) return <Loading text="Connecting…" />;
 
   const me = view.players.find((p) => p.id === view.you)!;
   const opponent = view.players.find((p) => p.id !== view.you);
   const banner = (
     <>
-      {status === 'offline' && <div className="banner">Connection lost — reconnecting…</div>}
+      {game.restarting ? (
+        <div className="banner" role="alert">The game server is restarting for an update, so this game will be lost. Sorry!</div>
+      ) : status === 'offline' && <div className="banner">Connection lost — reconnecting…</div>}
       {opponent && !opponent.connected && !opponent.left && opponent.reconnectDeadline && view.phase !== 'finished' && (
         <OpponentReconnecting name={opponent.name} deadline={game.toLocal(opponent.reconnectDeadline)} />
       )}
@@ -49,6 +64,7 @@ export function GamePage({ code }: { code: string }) {
       <Reveal
         result={shownResult}
         view={view}
+        onVote={(clueIndex) => socket.emit('game:vote', clueIndex)}
         onRematch={() => {
           socket.emit('game:rematch');
           setShownResult(null);
@@ -70,6 +86,8 @@ export function GamePage({ code }: { code: string }) {
 
   return screen;
 }
+
+const KEEP_AWAKE_MS = 4 * 60_000;
 
 function OpponentReconnecting({ name, deadline }: { name: string; deadline: number }) {
   const now = useNow(500);
@@ -111,14 +129,18 @@ function JoinForm({ code, join }: { code: string; join: (name: string) => Promis
   );
 }
 
-function Gone({ message }: { message: string }) {
+function Gone({ message, restarted }: { message: string; restarted: boolean }) {
   return (
     <div className="page-center">
       <div className="narrow">
         <Logo />
-        <h1>Game unavailable</h1>
-        <p className="tagline">{message || 'This game has ended or the link is wrong.'}</p>
-        <button className="primary big" onClick={() => navigate('/')}>Go home</button>
+        <h1>{restarted ? 'The server restarted' : 'Game unavailable'}</h1>
+        <p className="tagline">
+          {restarted
+            ? 'The game server restarted (for an update, or after going to sleep), and this game was lost. Sorry about that! Start a new game and send your opponent the new link.'
+            : message || 'This game has ended or the link is wrong.'}
+        </p>
+        <button className="primary big" onClick={() => navigate('/')}>{restarted ? 'Start a new game' : 'Go home'}</button>
       </div>
     </div>
   );

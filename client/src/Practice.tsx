@@ -74,7 +74,7 @@ export function Practice() {
         <button className="ghost small back-link" onClick={() => navigate('/')}>← Home</button>
         <Logo />
         <h1>Practice solo</h1>
-        <p className="tagline">Warm up on a generated grid. The clues are scrambled answers.</p>
+        <p className="tagline">Warm up on a generated grid. The clues are dictionary definitions.</p>
         <div className="panel">
           <DifficultyPicker value={difficulty} onChange={(d) => { setDifficulty(d); local.set('cd.difficulty', d); }} />
           <button className="primary big" onClick={start}>Start puzzle</button>

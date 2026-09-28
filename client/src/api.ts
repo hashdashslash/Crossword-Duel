@@ -13,6 +13,16 @@ async function post<T>(url: string, body: unknown): Promise<T> {
   return data as T;
 }
 
+/** Server info. `bootId` changes every time the server restarts. */
+export async function getServerConfig(): Promise<{ aiMode: string; bootId: string } | null> {
+  try {
+    const res = await fetch('/api/config', { cache: 'no-store' });
+    return res.ok ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
 export const createPractice = (difficulty: Difficulty) => post<PuzzleView>('/api/practice', { difficulty });
 
 export const checkPractice = (id: string, entries: Entries) => post<CheckResult>(`/api/practice/${id}/check`, { entries });

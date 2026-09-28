@@ -88,15 +88,21 @@ the review and hints use Claude Opus 5. You can change models in `shared/config.
 Every time new code is pushed to that branch, Render updates the site automatically.
 
 **Good to know about the free plan:** the site "sleeps" after 15 minutes with no visitors, so
-the first visit afterwards takes 30–60 seconds to wake up. Games are kept in memory, so an
-update or restart ends games in progress. Render's paid plan (about $7/month) removes the sleep.
+the first visit afterwards takes 30–60 seconds to wake up. While a game is open, each browser
+sends a tiny request every few minutes so the site doesn't fall asleep mid-game. Games are kept
+in memory, so an update or restart ends games in progress: players see a "server is restarting"
+notice, then a "the server restarted" page with a button to start a new game. Render's paid plan
+(about $7/month) removes the sleep.
 
 ---
 
 ## 5. How a game works
 
 1. **Lobby** — enter a name, create a game, send the invite link (or 4-letter code). The host
-   picks Easy / Medium / Hard. Both click **Ready**.
+   picks Easy / Medium / Hard and the **clue timer**: *Per word* (30 seconds each, one at a time)
+   or *Shared clock* (7:30 for all 15 words; tap the dots to jump between words and revise any
+   clue). If you've played this opponent before, the lobby shows your record against them. Both
+   click **Ready**.
 2. **Clue writing** — each player sees their 15 words one at a time, 30 seconds each.
    Clues can't contain the answer and are capped at 150 characters. Don't know a word? Tap it (or **What does this mean?**) for a short definition. A quick AI check warns
    about clues that don't fit (Edit / Leave blank / Keep anyway). **Blank clues** become free,
@@ -108,7 +114,15 @@ update or restart ends games in progress. Render's paid plan (about $7/month) re
    alternative clue. **Submit** highlights empty squares (light blue) and wrong letters
    (stronger blue). **Resign** is always available.
 5. **Reveal** — solve times, hint penalties, flagged clues (original, replacement, and why),
-   final times, then the winner with a trophy (or an X). View both grids, then **Rematch**.
+   final times, then the winner with a trophy (or an X). Each player picks the **best clue** their
+   opponent wrote, and sees which of their own clues was picked. **Share result** copies a short,
+   spoiler-free summary for group chats. View both grids, then **Rematch**.
+
+**Head-to-head record:** wins, losses and draws against each opponent (matched by name) are kept
+in your browser only.
+
+**Practice solo:** a single generated grid with dictionary definitions as clues (a word with no
+usable definition gets its letters scrambled instead).
 
 **Endings and tie-breaks:** the game ends when both finish, when the player still solving can
 no longer win, after 30 minutes, or on resignation / a disconnect of more than 60 seconds.

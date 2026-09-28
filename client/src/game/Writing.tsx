@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { CONFIG } from '../../../shared/config';
+import { CONFIG, poolSeconds } from '../../../shared/config';
 import type { GameView, NextResult, WritingView } from '../../../shared/protocol';
 import { clueContainsAnswer } from '../../../shared/rules';
 import { Loading, MuteButton } from '../components/ui';
 import { sfx } from '../lib/sound';
 import { useNow } from '../lib/useNow';
+import { formatTime } from '../solve/Timer';
 import type { GameSocket } from './socket';
 
 type DefinitionState =
@@ -47,7 +48,11 @@ function Intro({ writing, socket, toLocal, banner }: Omit<Props, 'view' | 'oppon
         <div className="panel intro">
           <h1>Write your clues</h1>
           <ul className="rules">
-            <li>You'll see your {writing.words.length} secret words one at a time, with <b>{CONFIG.secondsPerClue} seconds</b> each.</li>
+            {writing.timerMode === 'pool' ? (
+              <li>You have <b>{formatTime(poolSeconds() * 1000)}</b> for all {writing.words.length} secret words. Tap the dots at the top to jump between words and revise any clue.</li>
+            ) : (
+              <li>You'll see your {writing.words.length} secret words one at a time, with <b>{CONFIG.secondsPerClue} seconds</b> each.</li>
+            )}
             <li>Your opponent solves a crossword built from your clues. <b>Tricky is good</b> — it slows them down.</li>
             <li>But keep it fair: a clue that's unconnected to the answer or factually wrong gets replaced and costs <b>you +{CONFIG.flaggedCluePenaltySeconds}s</b>.</li>
             <li>Clues can't contain the answer word, and can be up to {CONFIG.clueCharLimit} characters. Inside jokes are fair game.</li>
@@ -64,6 +69,13 @@ function Intro({ writing, socket, toLocal, banner }: Omit<Props, 'view' | 'oppon
 function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | 'opponentName'>) {
   const index = writing.index;
   const word = writing.words[index]!;
+  const pool = writing.timerMode === 'pool';
+  const totalMs = (pool ? poolSeconds() : CONFIG.secondsPerClue) * 1000;
+  /** Pool mode: the next unwritten word after this one, if any. */
+  const nextOpen = pool
+    ? writing.words.map((_, k) => (index + 1 + k) % writing.words.length).find((i) => i !== index && !writing.words[i]!.done)
+    : undefined;
+  const writtenCount = writing.words.filter((w) => w.done).length;
   const [text, setText] = useState(writing.draft);
   const [warning, setWarning] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -115,8 +127,15 @@ function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | '
     });
   };
 
+  const goto = (i: number) => {
+    if (busy || i === index) return;
+    socket.emit('write:goto', i);
+  };
+
   const next = () => {
     if (busy || hasAnswer) return;
+    // Pool mode: an empty clue just moves on, so the word can be written later.
+    if (pool && !trimmed && nextOpen !== undefined) return goto(nextOpen);
     // A clue already checked (and flagged) needs an explicit choice; one already checked OK skips the re-check.
     send(checked.current.has(`ok:${trimmed}`) ? 'keep' : 'check');
   };
@@ -143,10 +162,28 @@ function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | '
   return (
     <div className="writing">
       <header className="writing-header">
-        <span className="label">Word {index + 1} of {writing.words.length}</span>
-        <div className="dots" aria-hidden>
-          {writing.words.map((w, i) => <span key={i} className={i < index ? (w.blank ? 'dot blank' : 'dot done') : i === index ? 'dot current' : 'dot'} />)}
-        </div>
+        <span className="label">
+          Word {index + 1} of {writing.words.length}
+          {pool && <span className="muted"> · {writtenCount} written</span>}
+        </span>
+        {pool ? (
+          <div className="dots pool" role="toolbar" aria-label="Jump to a word">
+            {writing.words.map((w, i) => (
+              <button
+                key={i}
+                className={`dot-btn ${i === index ? 'dot current' : w.done ? (w.blank ? 'dot blank' : 'dot done') : 'dot'}`}
+                aria-label={`Word ${i + 1}: ${w.answer}${w.done ? (w.blank ? ' (left blank)' : ' (written)') : ''}`}
+                aria-current={i === index}
+                onPointerDown={(e) => { e.preventDefault(); goto(i); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goto(i); } }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="dots" aria-hidden>
+            {writing.words.map((w, i) => <span key={i} className={i < index ? (w.blank ? 'dot blank' : 'dot done') : i === index ? 'dot current' : 'dot'} />)}
+          </div>
+        )}
         <MuteButton />
       </header>
       {banner}
@@ -186,8 +223,8 @@ function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | '
         )}
 
         <div className="countdown" aria-label={`${seconds} seconds left`}>
-          <div className="countdown-bar"><span style={{ width: `${(remainingMs / (CONFIG.secondsPerClue * 1000)) * 100}%` }} /></div>
-          <span className={`countdown-num ${seconds <= 5 ? 'urgent' : ''}`}>0:{String(seconds).padStart(2, '0')}</span>
+          <div className="countdown-bar"><span style={{ width: `${(remainingMs / totalMs) * 100}%` }} /></div>
+          <span className={`countdown-num ${seconds <= 5 ? 'urgent' : ''}`}>{formatTime(seconds * 1000)}</span>
         </div>
 
         <div className="clue-box">
@@ -223,7 +260,7 @@ function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | '
         ) : (
           <div className="writing-actions">
             <button className="primary big" onClick={next} disabled={busy || hasAnswer}>
-              {busy ? 'Checking…' : trimmed ? 'Next →' : 'Skip (leave blank) →'}
+              {busy ? 'Checking…' : trimmed ? 'Next →' : pool && nextOpen !== undefined ? 'Skip for now →' : 'Skip (leave blank) →'}
             </button>
           </div>
         )}

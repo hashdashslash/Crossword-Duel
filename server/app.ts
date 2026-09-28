@@ -1,5 +1,6 @@
 /** Builds the HTTP + real-time server (used by index.ts and by tests). */
 import express from 'express';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
@@ -13,12 +14,18 @@ import { checkPractice, createPractice } from './practice.js';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/**
+ * Changes every time the server starts. Games live in memory, so a browser that
+ * sees a different id knows the server restarted and its game was lost.
+ */
+export const BOOT_ID = randomUUID();
+
 export function createGameServer(opts: { ai: ClueAI }) {
   const app = express();
   app.use(express.json({ limit: '100kb' }));
 
   app.get('/api/config', (_req, res) => {
-    res.json({ aiMode: opts.ai.mode });
+    res.json({ aiMode: opts.ai.mode, bootId: BOOT_ID });
   });
 
   app.post('/api/practice', (req, res) => {

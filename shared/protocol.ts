@@ -3,7 +3,7 @@
  * The server pushes one `state` message (a GameView) to each player whenever
  * anything changes; players send the actions below.
  */
-import type { Difficulty } from './config.js';
+import type { Difficulty, TimerMode } from './config.js';
 import type { CellPos, Direction, PuzzleView } from './puzzle.js';
 
 export type Phase = 'lobby' | 'writing' | 'reviewing' | 'solving' | 'finished';
@@ -23,10 +23,11 @@ export interface PlayerInfo {
 export interface WritingView {
   introDone: boolean;
   introDeadline: number | null;
+  timerMode: TimerMode;
   /** Your own words, in writing order. */
   words: { answer: string; done: boolean; blank: boolean }[];
   index: number;
-  /** Server time when the current word auto-advances. */
+  /** Server time when the current word auto-advances (in pool mode: when all writing ends). */
   deadline: number | null;
   /** What you had typed for the current word (restored after a reconnect). */
   draft: string;
@@ -105,6 +106,8 @@ export interface RevealGrid {
 }
 
 export interface GameResult {
+  /** Unique per finished game (used to record each result once). */
+  id: string;
   reason: EndReason;
   winnerId: string | null;
   /** How a tie on final time was broken. */
@@ -117,10 +120,17 @@ export interface GameResult {
   reviewSkipped: boolean;
 }
 
+/** "Best clue" votes on the results screen, by voter id. */
+export interface BestClueVote {
+  /** Index into the clues of the grid the voter solved (RevealGrid.clues). */
+  clueIndex: number;
+}
+
 export interface GameView {
   code: string;
   phase: Phase;
   difficulty: Difficulty;
+  timerMode: TimerMode;
   you: string;
   players: PlayerInfo[];
   serverNow: number;
@@ -128,6 +138,8 @@ export interface GameView {
   writing?: WritingView;
   solving?: SolvingView;
   result?: GameResult;
+  /** Best-clue votes for the finished game, by voter id (only while phase is 'finished'). */
+  votes?: Record<string, BestClueVote>;
 }
 
 export type Err = { ok: false; error: string };
@@ -145,8 +157,10 @@ export interface ClientToServerEvents {
   'room:rejoin': (p: { code: string; token: string }, ack: Ack<{ ok: true }>) => void;
   'room:leave': () => void;
   'lobby:difficulty': (d: Difficulty) => void;
+  'lobby:timer-mode': (m: TimerMode) => void;
   'lobby:ready': (ready: boolean) => void;
   'write:intro-done': () => void;
+  'write:goto': (index: number) => void;
   'write:draft': (p: { index: number; text: string }) => void;
   'write:next': (p: { index: number; text: string; mode: 'check' | 'keep' | 'blank' }, ack: Ack<{ ok: true; result: NextResult }>) => void;
   'write:define': (p: { index: number }, ack: Ack<{ ok: true; word: string; senses: { pos: string; text: string }[] }>) => void;
@@ -156,8 +170,11 @@ export interface ClientToServerEvents {
   'solve:hint': (clueIndex: number, ack: Ack<{ ok: true; text: string }>) => void;
   'solve:resign': () => void;
   'game:rematch': () => void;
+  'game:vote': (clueIndex: number) => void;
 }
 
 export interface ServerToClientEvents {
   state: (view: GameView) => void;
+  /** The server is shutting down (for an update or a restart); games in progress will be lost. */
+  'server:restarting': () => void;
 }

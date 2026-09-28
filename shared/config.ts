@@ -102,4 +102,13 @@ export const CONFIG = {
 } as const;
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
+
+/**
+ * How the clue-writing clock works. 'perWord': each word gets secondsPerClue,
+ * one at a time. 'pool': one shared clock for all words (wordsPerGrid × secondsPerClue),
+ * and players can jump between words to revise them.
+ */
+export type TimerMode = 'perWord' | 'pool';
+export const TIMER_MODES: readonly TimerMode[] = ['perWord', 'pool'];
+export const poolSeconds = () => CONFIG.wordsPerGrid * CONFIG.secondsPerClue;
 export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];

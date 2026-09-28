@@ -19,6 +19,7 @@ const Review = z.object({
   results: z.array(z.object({ id: z.string(), flagged: z.boolean(), explanation: z.string(), replacement: z.string() })),
 });
 const AltClue = z.object({ clue: z.string() });
+const Define = z.object({ senses: z.array(z.object({ pos: z.string(), text: z.string() })) });
 
 interface Attempt {
   model: string;
@@ -138,6 +139,14 @@ export class AnthropicClueAI implements ClueAI {
     const out = await this.ask('review', Review, reviewSystem(), `Clues to review:\n${list}`,
       [{ model: CONFIG.ai.reviewModel, ms: CONFIG.ai.reviewPrimaryMs }, { model: CONFIG.ai.fallbackModel }], 16000, signal);
     return out.results;
+  }
+
+  async define(word: string, signal: AbortSignal) {
+    const out = await this.ask('definition', Define,
+      'You write short, plain dictionary definitions, like a learner\'s dictionary. Give 1 to 3 of the most common senses. ' +
+        'For each: the part of speech (noun, verb, adjective, adverb) and a definition under 15 words.',
+      `Define the English word: ${word.toLowerCase()}`, [{ model: CONFIG.ai.fallbackModel }], 400, signal);
+    return out.senses.slice(0, 3).map((s) => ({ pos: s.pos.toLowerCase().slice(0, 20), text: s.text.slice(0, 200) }));
   }
 
   async alternativeClue(answer: string, avoid: string[], difficulty: Difficulty, signal: AbortSignal): Promise<string> {

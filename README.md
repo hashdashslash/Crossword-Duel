@@ -98,7 +98,7 @@ update or restart ends games in progress. Render's paid plan (about $7/month) re
 1. **Lobby** — enter a name, create a game, send the invite link (or 4-letter code). The host
    picks Easy / Medium / Hard. Both click **Ready**.
 2. **Clue writing** — each player sees their 15 words one at a time, 30 seconds each.
-   Clues can't contain the answer and are capped at 150 characters. A quick AI check warns
+   Clues can't contain the answer and are capped at 150 characters. Don't know a word? Tap it (or **What does this mean?**) for a short definition. A quick AI check warns
    about clues that don't fit (Edit / Leave blank / Keep anyway). **Blank clues** become free,
    pre-filled words in the opponent's grid.
 3. **Review** — the AI reviews every clue. Clues that are unconnected to the answer or factually
@@ -129,7 +129,9 @@ penalties, reconnect window, maximum solve time, grid size limits, AI models and
 strictness — is in **`shared/config.ts`**, each with a comment.
 
 The word lists are plain text files (one word per line) in `server/words/`
-(`easy.txt`, `medium.txt`, `hard.txt`). After editing, run `npm run words:check`.
+(`easy.txt`, `medium.txt`, `hard.txt`). After editing, run `npm run words:check` and `npm run words:define`
+(which refreshes the definitions shown during clue writing). Definitions come from WordNet 3.1
+(© Princeton University; see `server/words/DEFINITIONS-LICENSE.txt`).
 
 ---
 

@@ -72,6 +72,11 @@ async function writeAll(c: Client, special: Record<number, (answer: string) => P
   c.emit('write:intro-done');
   await until(() => c.view?.writing?.introDone);
   const answers = c.view!.writing!.words.map((w) => w.answer);
+  // The writer can look up a definition of their current word.
+  const def = await emit<{ ok: boolean; word: string; senses: { pos: string; text: string }[] }>(c, 'write:define', { index: 0 });
+  expect(def.ok).toBe(true);
+  expect(def.word).toBe(answers[0]);
+  expect(def.senses.length).toBeGreaterThan(0);
   for (let i = 0; i < answers.length; i++) {
     await until(() => c.view?.writing?.index === i);
     if (special[i]) await special[i]!(answers[i]!);

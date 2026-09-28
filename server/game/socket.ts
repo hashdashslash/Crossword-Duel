@@ -118,6 +118,12 @@ export function attachGameServer(io: IO, opts: { ai: ClueAI }) {
         .then((result) => ack({ ok: true, result }))
         .catch((e) => { console.error(e); ack(fail('Something went wrong.')); });
     });
+    socket.on('write:define', (d, ack) => {
+      if (!room || !player) return ack(fail('Not in a game.'));
+      room.define(player, Number(d?.index))
+        .then((r) => (r ? ack({ ok: true, ...r }) : ack(fail('No word to define right now.'))))
+        .catch(() => ack(fail("Couldn't look that up.")));
+    });
     socket.on('write:check', (d, ack) => {
       if (!room || !player) return ack(fail('Not in a game.'));
       room.check(player, Number(d?.index), String(d?.text ?? ''))

@@ -13,7 +13,8 @@
     "grid:stress": "tsx scripts/grid-stress-test.ts",
     "grid:demo": "tsx scripts/grid-demo.ts",
     "words:check": "tsx scripts/check-words.ts",
-    "ai:check": "tsx scripts/ai-check.ts"
+    "ai:check": "tsx scripts/ai-check.ts",
+    "words:define": "tsx scripts/build-definitions.ts"
   },
   "engines": {
     "node": ">=20.12"
@@ -28,7 +29,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vitest": "^5.0.2",
-    "word-list": "^4.1.0"
+    "word-list": "^4.1.0",
+    "wordnet-db": "^3.1.14"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

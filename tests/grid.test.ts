@@ -5,6 +5,7 @@ import { generateGamePuzzles } from '../server/grid/puzzles.js';
 import type { Grid, PlacedWord } from '../server/grid/types.js';
 import { validateGrid, validatePair } from '../server/grid/validate.js';
 import { areRelated, loadWordBank } from '../server/words/wordBank.js';
+import { lookupDefinition } from '../server/words/definitions.js';
 
 /** Builds a Grid from word placements, for hand-made test cases. */
 function makeGrid(rows: number, cols: number, words: Omit<PlacedWord, 'number'>[]): Grid {
@@ -101,6 +102,13 @@ describe('word bank', () => {
   it('never repeats a word across difficulties', () => {
     const all = DIFFICULTIES.flatMap((d) => bank[d]);
     expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('has a definition for almost every word', () => {
+    const all = DIFFICULTIES.flatMap((d) => bank[d]);
+    const missing = all.filter((w) => !lookupDefinition(w));
+    expect(missing.length).toBeLessThan(20);
+    expect(lookupDefinition('garden')![0]!.text).toMatch(/plants/);
   });
 
   it('treats plurals and shared stems as related', () => {

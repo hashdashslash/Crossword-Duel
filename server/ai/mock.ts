@@ -41,6 +41,11 @@ export class MockClueAI implements ClueAI {
     );
   }
 
+  async define(word: string, signal: AbortSignal) {
+    await sleep(300, signal);
+    return [{ pos: 'word', text: `(Test mode) No built-in definition for ${word.toLowerCase()}.` }];
+  }
+
   async alternativeClue(answer: string, avoid: string[], _d: Difficulty, signal: AbortSignal): Promise<string> {
     await sleep(700, signal);
     const first = templateClue(answer, 0);

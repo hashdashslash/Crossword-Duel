@@ -149,6 +149,7 @@ export interface ClientToServerEvents {
   'write:intro-done': () => void;
   'write:draft': (p: { index: number; text: string }) => void;
   'write:next': (p: { index: number; text: string; mode: 'check' | 'keep' | 'blank' }, ack: Ack<{ ok: true; result: NextResult }>) => void;
+  'write:define': (p: { index: number }, ack: Ack<{ ok: true; word: string; senses: { pos: string; text: string }[] }>) => void;
   'write:check': (p: { index: number; text: string }, ack: Ack<{ ok: true; valid: boolean; reason: string }>) => void;
   'solve:entries': (entries: string[][]) => void;
   'solve:submit': (entries: string[][], ack: Ack<{ ok: true; solved: boolean; blanks: CellPos[]; wrong: CellPos[] }>) => void;

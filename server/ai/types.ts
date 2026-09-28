@@ -26,6 +26,8 @@ export interface ClueAI {
   review(items: ReviewItem[], signal: AbortSignal): Promise<ReviewVerdict[]>;
   /** A new clue for `answer` that differs from every clue in `avoid`. */
   alternativeClue(answer: string, avoid: string[], difficulty: Difficulty, signal: AbortSignal): Promise<string>;
+  /** Short dictionary-style definitions (used when the built-in dictionary has no entry). */
+  define(word: string, signal: AbortSignal): Promise<{ pos: string; text: string }[]>;
 }
 
 /** Runs `fn` with an abort signal that fires after `ms`; rejects on timeout. */

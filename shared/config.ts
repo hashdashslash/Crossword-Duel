@@ -25,6 +25,8 @@ export const CONFIG = {
   reviewTimeoutMs: 15000,
   /** Hint generation: give up (no charge) after this long. */
   hintTimeoutMs: 15000,
+  /** Word definition from the AI (for the few words missing from the built-in dictionary). */
+  definitionTimeoutMs: 5000,
   /** The "Building your puzzles…" screen shows for at least this long. */
   minBuildingScreenMs: 2500,
 

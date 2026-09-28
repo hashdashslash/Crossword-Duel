@@ -7,6 +7,11 @@ import { sfx } from '../lib/sound';
 import { useNow } from '../lib/useNow';
 import type { GameSocket } from './socket';
 
+type DefinitionState =
+  | { status: 'hidden' }
+  | { status: 'loading' }
+  | { status: 'done'; senses: { pos: string; text: string }[] };
+
 interface Props {
   view: GameView;
   writing: WritingView;
@@ -63,6 +68,7 @@ function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | '
   const [warning, setWarning] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [definition, setDefinition] = useState<DefinitionState>({ status: 'hidden' });
   const checked = useRef(new Set<string>());
   const autoChecking = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -76,6 +82,14 @@ function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | '
   const nearLimit = text.length >= CONFIG.clueCounterWarnAt;
 
   useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const toggleDefinition = () => {
+    if (definition.status !== 'hidden') return setDefinition({ status: 'hidden' });
+    setDefinition({ status: 'loading' });
+    socket.emit('write:define', { index }, (res) => {
+      setDefinition({ status: 'done', senses: res.ok ? res.senses : [] });
+    });
+  };
 
   const change = (value: string) => {
     const v = value.replace(/\n/g, ' ').slice(0, CONFIG.clueCharLimit);
@@ -138,10 +152,38 @@ function WordWriter({ writing, socket, toLocal, banner }: Omit<Props, 'view' | '
       {banner}
 
       <main className="writing-main">
-        <div className="word-tiles" aria-label={`Your word: ${word.answer}`}>
+        <div
+          className="word-tiles tappable"
+          aria-label={`Your word: ${word.answer}`}
+          title="Tap for a definition"
+          onPointerDown={(e) => { e.preventDefault(); toggleDefinition(); }}
+        >
           {[...word.answer].map((ch, i) => <span key={i} className="tile" style={{ animationDelay: `${i * 40}ms` }}>{ch}</span>)}
         </div>
-        <p className="muted center">{word.answer.length} letters</p>
+        <p className="muted center word-meta">
+          {word.answer.length} letters ·{' '}
+          <button
+            className="link define-btn"
+            aria-expanded={definition.status !== 'hidden'}
+            // Keep the cursor in the clue box (and the phone keyboard open).
+            onPointerDown={(e) => { e.preventDefault(); toggleDefinition(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDefinition(); } }}
+          >
+            {definition.status === 'hidden' ? 'What does this mean?' : 'Hide definition'}
+          </button>
+        </p>
+        {definition.status !== 'hidden' && (
+          <div className="definition" aria-live="polite">
+            {definition.status === 'loading' && <p className="muted">Looking it up…</p>}
+            {definition.status === 'done' && (definition.senses.length ? (
+              <ol>
+                {definition.senses.map((sense, i) => (
+                  <li key={i}><span className="pos">{sense.pos}</span> {sense.text}</li>
+                ))}
+              </ol>
+            ) : <p className="muted">No definition found for this word.</p>)}
+          </div>
+        )}
 
         <div className="countdown" aria-label={`${seconds} seconds left`}>
           <div className="countdown-bar"><span style={{ width: `${(remainingMs / (CONFIG.secondsPerClue * 1000)) * 100}%` }} /></div>

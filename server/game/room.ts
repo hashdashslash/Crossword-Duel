@@ -13,6 +13,10 @@ import { cleanClue, clueContainsAnswer } from '../../shared/rules.js';
 import type { ClueAI, QuickCheckResult, ReviewItem, ReviewVerdict } from '../ai/types.js';
 import { withTimeout } from '../ai/types.js';
 import { AIError } from '../ai/anthropic.js';
+import { lookupDefinition, type Sense } from '../words/definitions.js';
+
+/** Definitions the AI wrote for words missing from the dictionary (shared by all games). */
+const aiDefinitions = new Map<string, Sense[]>();
 import { generateGamePuzzles } from '../grid/puzzles.js';
 import type { Grid, PlacedWord } from '../grid/types.js';
 import { checkEntries } from '../solve/check.js';
@@ -293,6 +297,26 @@ export class Room {
     }
     this.submitClue(p, text);
     return { status: 'advanced' };
+  }
+
+  /**
+   * A short definition of one of the player's own words, from the built-in
+   * dictionary, or the AI when the dictionary has no entry.
+   */
+  async define(p: Player, index: number): Promise<{ word: string; senses: Sense[] } | null> {
+    const slot = this.phase === 'writing' ? p.writing?.slots[index] : undefined;
+    if (!slot) return null;
+    const word = slot.answer;
+    const known = lookupDefinition(word) ?? aiDefinitions.get(word);
+    if (known) return { word, senses: known };
+    try {
+      const senses = await withTimeout(CONFIG.definitionTimeoutMs, (signal) => this.deps.ai.define(word, signal));
+      if (senses.length) aiDefinitions.set(word, senses);
+      return { word, senses };
+    } catch (e) {
+      console.warn(`[ai] definition for ${word} failed: ${e instanceof AIError ? e.reason : (e as Error).message}`);
+      return { word, senses: [] };
+    }
   }
 
   /** The live check that runs with 5 seconds left. Returns valid on any failure. */

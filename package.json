@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "grid:stress": "tsx scripts/grid-stress-test.ts",
     "grid:demo": "tsx scripts/grid-demo.ts",
-    "words:check": "tsx scripts/check-words.ts"
+    "words:check": "tsx scripts/check-words.ts",
+    "ai:check": "tsx scripts/ai-check.ts"
   },
   "engines": {
     "node": ">=20.12"

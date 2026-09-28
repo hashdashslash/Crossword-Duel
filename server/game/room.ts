@@ -12,6 +12,7 @@ import type {
 import { cleanClue, clueContainsAnswer } from '../../shared/rules.js';
 import type { ClueAI, QuickCheckResult, ReviewItem, ReviewVerdict } from '../ai/types.js';
 import { withTimeout } from '../ai/types.js';
+import { AIError } from '../ai/anthropic.js';
 import { generateGamePuzzles } from '../grid/puzzles.js';
 import type { Grid, PlacedWord } from '../grid/types.js';
 import { checkEntries } from '../solve/check.js';
@@ -414,15 +415,28 @@ export class Room {
 
   /** A validated AI clue for `answer`, different from `avoid`; null on failure. */
   private async generateClue(answer: string, avoid: string[]): Promise<string | null> {
+    const r = await this.tryGenerateClue(answer, avoid);
+    return 'clue' in r ? r.clue : null;
+  }
+
+  /** Like generateClue, but on failure returns a plain-English reason. */
+  private async tryGenerateClue(answer: string, avoid: string[]): Promise<{ clue: string } | { error: string }> {
     try {
       const raw = await withTimeout(CONFIG.hintTimeoutMs, (signal) => this.deps.ai.alternativeClue(answer, avoid, this.difficulty, signal));
       const clue = cleanClue(raw);
-      if (!clue || clueContainsAnswer(clue, answer)) return null;
-      if (avoid.some((a) => a.trim().toLowerCase() === clue.toLowerCase())) return null;
-      return clue;
+      if (!clue || clueContainsAnswer(clue, answer)) {
+        console.warn(`[ai] clue for ${answer} rejected: it contained the answer ("${clue}")`);
+        return { error: 'the AI kept giving clues that contained the answer' };
+      }
+      if (avoid.some((a) => a.trim().toLowerCase() === clue.toLowerCase())) {
+        console.warn(`[ai] clue for ${answer} rejected: it repeated an existing clue`);
+        return { error: 'the AI repeated the existing clue' };
+      }
+      return { clue };
     } catch (e) {
-      console.warn('[ai] clue generation failed:', (e as Error).message);
-      return null;
+      const reason = e instanceof AIError ? e.reason : /timed out/i.test((e as Error).message) ? 'the AI took too long to answer' : (e as Error).message;
+      console.warn(`[ai] clue generation for ${answer} failed: ${reason}`);
+      return { error: reason };
     }
   }
 
@@ -530,10 +544,11 @@ export class Room {
 
     s.hintPending = true;
     const gen = this.generation;
-    const text = await this.generateClue(word.answer, [fc.text, fc.original]);
+    const made = await this.tryGenerateClue(word.answer, [fc.text, fc.original]);
     s.hintPending = false;
     if (gen !== this.generation || this.phase !== 'solving' || s.finishedAt !== null) return { ok: false, error: 'The game has moved on.' };
-    if (!text) return { ok: false, error: "Couldn't create a hint right now. You were not charged — try again." };
+    if ('error' in made) return { ok: false, error: `Couldn't create a hint: ${made.error}. You were not charged.` };
+    const text = made.clue;
     s.hintsUsed++;
     s.hints[clueIndex] = text;
     this.touch();

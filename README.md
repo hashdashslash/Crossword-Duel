@@ -59,6 +59,12 @@ The AI checks clues, reviews them, writes replacement clues and writes hints.
    `ANTHROPIC_API_KEY=`. Restart `npm run dev`; the terminal will say `AI: using the Anthropic API.`
 3. **Online:** paste the key into your hosting dashboard (see below), never into the code.
 
+**Check that the AI works:** in the project folder, run `npm run ai:check`. It checks your key,
+your account credit and access to each AI model, tries one real hint, and tells you in plain
+English what (if anything) is wrong. It costs a tiny fraction of a cent. The server also runs
+this check every time it starts — on Render, look for **"AI self-test"** in the **Logs** tab.
+If a hint fails during a game, the message on screen also says why.
+
 **Your key stays private.** The `.env` file is listed in `.gitignore`, so it is never uploaded
 to GitHub. The key is only ever read on the server; players' browsers never see it.
 
@@ -136,6 +142,7 @@ The word lists are plain text files (one word per line) in `server/words/`
 | `npm run grid:demo -- hard` | Print one game's two puzzles |
 | `npm run grid:stress` | Build 1,200 grids and check every rule |
 | `npm run words:check` | Check the word lists for typos and duplicates |
+| `npm run ai:check` | Check your Anthropic API key, credit and model access |
 | `npm run build` then `npm start` | Run the production version (what Render runs) |
 
 ---

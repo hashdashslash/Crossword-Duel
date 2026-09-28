@@ -4,6 +4,7 @@
  */
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { runAISelfTest } from './ai/anthropic.js';
 import { createClueAI } from './ai/index.js';
 import { createGameServer, ROOT } from './app.js';
 
@@ -18,4 +19,11 @@ http.listen(port, () => {
   console.log(ai.mode === 'anthropic'
     ? 'AI: using the Anthropic API.'
     : 'AI: pretend mode (no ANTHROPIC_API_KEY set). Clues containing the word "wrong" are treated as bad.');
+  if ('client' in ai) {
+    // Check the key, credit and model access once at startup, so problems show in the log.
+    void runAISelfTest(ai as Parameters<typeof runAISelfTest>[0]).then(({ ok, lines }) => {
+      console.log(ok ? 'AI self-test passed:' : 'AI self-test FAILED — hints and clue checks will not work until this is fixed:');
+      for (const line of lines) console.log(line);
+    });
+  }
 });

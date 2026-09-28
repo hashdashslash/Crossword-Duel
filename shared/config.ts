@@ -24,7 +24,7 @@ export const CONFIG = {
   /** Full clue review: give up (use original clues, no penalties) after this long. */
   reviewTimeoutMs: 15000,
   /** Hint generation: give up (no charge) after this long. */
-  hintTimeoutMs: 12000,
+  hintTimeoutMs: 15000,
   /** The "Building your puzzles…" screen shows for at least this long. */
   minBuildingScreenMs: 2500,
 
@@ -40,7 +40,7 @@ export const CONFIG = {
     fallbackModel: 'claude-haiku-4-5',
     /** How long the main model gets before switching to the fallback model (ms). */
     reviewPrimaryMs: 10000,
-    hintPrimaryMs: 7000,
+    hintPrimaryMs: 6000,
     /**
      * How strict the clue review is. 'lenient' follows the game rules: flag only
      * unconnected or factually wrong clues, and allow when in doubt.

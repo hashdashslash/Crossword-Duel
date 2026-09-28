@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CONFIG, type Difficulty } from '../../shared/config';
 import { validateName } from '../../shared/rules';
 import { DifficultyPicker } from './components/DifficultyPicker';
+import { HowToPlayButton, IntroPopup, RulesModal, shouldShowIntro } from './components/HowToPlay';
 import { Logo } from './components/ui';
 import { getSocket } from './game/socket';
 import { tokenKey } from './game/useGame';
@@ -34,6 +35,8 @@ export function Home() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [intro, setIntro] = useState(shouldShowIntro);
+  const [rules, setRules] = useState(false);
 
   const create = () => {
     const check = validateName(name);
@@ -96,10 +99,12 @@ export function Home() {
         {error && <p className="message center">{error}</p>}
 
         <DailyCard />
+        {intro && <IntroPopup onClose={() => setIntro(false)} onRules={() => setRules(true)} />}
+        {rules && <RulesModal onClose={() => setRules(false)} />}
 
         <div className="home-links">
           <button className="link" onClick={() => navigate('/practice')}>Practice solo</button>
-          <HowToPlay />
+          <HowToPlayButton />
         </div>
       </div>
     </div>
@@ -117,29 +122,5 @@ function DailyCard() {
       </span>
       <span aria-hidden className="daily-arrow">→</span>
     </button>
-  );
-}
-
-function HowToPlay() {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button className="link" onClick={() => setOpen(true)}>How to play</button>
-      {open && (
-        <div className="overlay" onClick={() => setOpen(false)}>
-          <div className="card dialog how" onClick={(e) => e.stopPropagation()}>
-            <h2>How to play</h2>
-            <ol>
-              <li>Create a game and send the link to a friend. Both click <b>Ready</b>.</li>
-              <li>You each get {CONFIG.wordsPerGrid} secret words. Write a clue for each — {CONFIG.secondsPerClue} seconds per word.</li>
-              <li>Swap! Solve the crossword built from your opponent's clues.</li>
-              <li>Lowest final time wins. Hints cost +{CONFIG.hintPenaltySeconds}s. Unfair clues (unconnected or factually wrong) cost their writer +{CONFIG.flaggedCluePenaltySeconds}s.</li>
-            </ol>
-            <p className="muted">Tricky clues slow your opponent down — that's the strategy. Inside jokes are fair game.</p>
-            <div className="card-actions"><button className="primary" onClick={() => setOpen(false)}>Got it</button></div>
-          </div>
-        </div>
-      )}
-    </>
   );
 }

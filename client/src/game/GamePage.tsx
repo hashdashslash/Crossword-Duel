@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getServerConfig } from '../api';
 import type { GameResult, GameView } from '../../../shared/protocol';
 import { validateName } from '../../../shared/rules';
+import { HowToPlayButton, IntroPopup, RulesModal, shouldShowIntro } from '../components/HowToPlay';
 import { Loading, Logo } from '../components/ui';
 import { NAME_KEY, NameField } from '../Home';
 import { navigate } from '../lib/router';
@@ -103,6 +104,8 @@ function JoinForm({ code, join }: { code: string; join: (name: string) => Promis
   const [name, setName] = useState(() => local.get(NAME_KEY) ?? '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [intro, setIntro] = useState(shouldShowIntro);
+  const [rules, setRules] = useState(false);
   const submit = async () => {
     const check = validateName(name);
     if (!check.ok) return setError(check.error);
@@ -123,7 +126,12 @@ function JoinForm({ code, join }: { code: string; join: (name: string) => Promis
           <button className="primary big" type="submit" disabled={busy}>Join game</button>
           {error && <p className="message">{error}</p>}
         </form>
-        <div className="home-links"><button className="link" onClick={() => navigate('/')}>Back to home</button></div>
+        <div className="home-links">
+          <HowToPlayButton />
+          <button className="link" onClick={() => navigate('/')}>Back to home</button>
+        </div>
+        {intro && <IntroPopup onClose={() => setIntro(false)} onRules={() => setRules(true)} />}
+        {rules && <RulesModal onClose={() => setRules(false)} />}
       </div>
     </div>
   );

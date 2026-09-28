@@ -44,12 +44,12 @@ function bestBalancedPair(as: ScoredGrid[], bs: ScoredGrid[]): [ScoredGrid, Scor
 
 export function generateGamePuzzles(
   difficulty: Difficulty,
-  options: { seed?: number; bank?: WordBank } = {},
+  options: { seed?: number; bank?: WordBank; words?: string[] } = {},
 ): GenerateResult {
   const started = Date.now();
   const seed = options.seed ?? randomSeed();
   const rng: Rng = createRng(seed);
-  const words = (options.bank ?? loadWordBank())[difficulty];
+  const words = options.words ?? (options.bank ?? loadWordBank())[difficulty];
 
   for (let redraw = 0; redraw < CONFIG.grid.maxWordRedraws; redraw++) {
     const pool = drawUnrelated(words, CONFIG.candidatePoolPerGrid * 2, rng);
@@ -69,10 +69,10 @@ export function generateGamePuzzles(
 }
 
 /** Builds one stand-alone grid (used for single-player practice). */
-export function generateSingleGrid(difficulty: Difficulty, options: { seed?: number; bank?: WordBank } = {}): Grid {
+export function generateSingleGrid(difficulty: Difficulty, options: { seed?: number; bank?: WordBank; words?: string[] } = {}): Grid {
   const seed = options.seed ?? randomSeed();
   const rng = createRng(seed);
-  const words = (options.bank ?? loadWordBank())[difficulty];
+  const words = options.words ?? (options.bank ?? loadWordBank())[difficulty];
   for (let redraw = 0; redraw < CONFIG.grid.maxWordRedraws; redraw++) {
     const grids = buildValidGrids(drawUnrelated(words, CONFIG.candidatePoolPerGrid, rng), rng);
     if (grids.length) return grids[0]!.grid;

@@ -6,6 +6,8 @@ import { Logo } from './components/ui';
 import { getSocket } from './game/socket';
 import { tokenKey } from './game/useGame';
 import { navigate } from './lib/router';
+import { dailyNumber } from '../../shared/daily';
+import { dailyResult, localDate } from './lib/daily';
 import { local, session } from './lib/storage';
 
 export const NAME_KEY = 'cd.name';
@@ -93,12 +95,28 @@ export function Home() {
 
         {error && <p className="message center">{error}</p>}
 
+        <DailyCard />
+
         <div className="home-links">
           <button className="link" onClick={() => navigate('/practice')}>Practice solo</button>
           <HowToPlay />
         </div>
       </div>
     </div>
+  );
+}
+
+function DailyCard() {
+  const today = localDate();
+  const done = dailyResult(today) !== null;
+  return (
+    <button className="panel daily-card" onClick={() => navigate('/daily')}>
+      <span>
+        <strong>Daily puzzle #{dailyNumber(today)}</strong>
+        <span className="muted small-print">{done ? 'Solved today ✓' : 'One crossword a day, the same for everyone'}</span>
+      </span>
+      <span aria-hidden className="daily-arrow">→</span>
+    </button>
   );
 }
 

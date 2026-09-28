@@ -10,6 +10,7 @@ import { DIFFICULTIES, type Difficulty } from '../shared/config.js';
 import type { ClientToServerEvents, ServerToClientEvents } from '../shared/protocol.js';
 import type { ClueAI } from './ai/types.js';
 import { attachGameServer } from './game/socket.js';
+import { createDaily } from './daily.js';
 import { checkPractice, createPractice } from './practice.js';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -39,6 +40,20 @@ export function createGameServer(opts: { ai: ClueAI }) {
     } catch (e) {
       console.error(e);
       res.status(500).json({ error: 'Could not build a puzzle. Please try again.' });
+    }
+  });
+
+  app.post('/api/daily', (req, res) => {
+    try {
+      const daily = createDaily(req.body?.date);
+      if ('error' in daily) {
+        res.status(400).json(daily);
+        return;
+      }
+      res.json(daily);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Could not build the daily puzzle. Please try again.' });
     }
   });
 

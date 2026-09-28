@@ -8,8 +8,8 @@
  */
 import { readFileSync } from 'node:fs';
 import wordListPath from 'word-list';
-import { CONFIG, DIFFICULTIES, type Difficulty } from '../shared/config.js';
-import { parseWordFile, wordFilePath } from '../server/words/wordBank.js';
+import { CONFIG, DIFFICULTIES, THEMES, type Difficulty } from '../shared/config.js';
+import { parseWordFile, themeFilePath, wordFilePath } from '../server/words/wordBank.js';
 
 const dictionary = new Set(readFileSync(wordListPath, 'utf8').split('\n').map((w) => w.trim().toUpperCase()));
 const valid = new RegExp(`^[A-Z]{${CONFIG.wordMinLength},${CONFIG.wordMaxLength}}$`);
@@ -35,6 +35,25 @@ for (const d of DIFFICULTIES) {
 
   const mix = [...lengths].sort((a, b) => a[0] - b[0]).map(([l, n]) => `${l}:${n}`).join(' ');
   console.log(`${d.padEnd(6)} ${String(seen.size).padStart(4)} words   lengths ${mix}`);
+  for (const p of problems) console.log(`   ✗ ${p}`);
+  errors += problems.length;
+}
+
+// Theme lists may share words with the difficulty lists, but each needs enough words for a game.
+const minThemeWords = CONFIG.candidatePoolPerGrid * 4;
+for (const t of THEMES) {
+  if (t === 'any') continue;
+  const words = parseWordFile(readFileSync(themeFilePath(t), 'utf8'));
+  const seen = new Set<string>();
+  const problems: string[] = [];
+  for (const w of words) {
+    if (!valid.test(w)) problems.push(`"${w}" must be ${CONFIG.wordMinLength}-${CONFIG.wordMaxLength} letters A-Z`);
+    else if (!dictionary.has(w)) problems.push(`"${w}" is not in the dictionary`);
+    if (seen.has(w)) problems.push(`"${w}" is listed twice`);
+    seen.add(w);
+  }
+  if (seen.size < minThemeWords) problems.push(`needs at least ${minThemeWords} words (has ${seen.size})`);
+  console.log(`theme ${t.padEnd(8)} ${String(seen.size).padStart(4)} words`);
   for (const p of problems) console.log(`   ✗ ${p}`);
   errors += problems.length;
 }

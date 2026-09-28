@@ -5,6 +5,8 @@
 export const CONFIG = {
   // ── Game rules ────────────────────────────────────────────
   wordsPerGrid: 15,
+  /** Difficulty of the daily puzzle. */
+  dailyDifficulty: 'medium' as 'easy' | 'medium' | 'hard',
   secondsPerClue: 30,
   clueCharLimit: 150,
   /** The live counter turns blue once this many characters are typed. */
@@ -112,3 +114,17 @@ export type TimerMode = 'perWord' | 'pool';
 export const TIMER_MODES: readonly TimerMode[] = ['perWord', 'pool'];
 export const poolSeconds = () => CONFIG.wordsPerGrid * CONFIG.secondsPerClue;
 export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'medium', 'hard'];
+
+/**
+ * Word themes. 'any' uses the difficulty word lists; the others use
+ * server/words/themes/<theme>.txt (difficulty then only affects hint and replacement clues).
+ */
+export type Theme = 'any' | 'food' | 'animals' | 'sports' | 'nature';
+export const THEMES: readonly Theme[] = ['any', 'food', 'animals', 'sports', 'nature'];
+export const THEME_LABELS: Record<Theme, string> = {
+  any: 'Any words',
+  food: 'Food & drink',
+  animals: 'Animals',
+  sports: 'Sports & games',
+  nature: 'Nature & weather',
+};

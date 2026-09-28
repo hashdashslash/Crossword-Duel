@@ -7,9 +7,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { DIFFICULTIES } from '../shared/config.js';
+import { DIFFICULTIES, THEMES } from '../shared/config.js';
 import type { Definitions, Sense } from '../server/words/definitions.js';
-import { loadWordBank } from '../server/words/wordBank.js';
+import { loadWordBank, wordsFor } from '../server/words/wordBank.js';
 import { ROOT } from '../server/app.js';
 
 const require = createRequire(import.meta.url);
@@ -69,12 +69,11 @@ function define(word: string): Sense[] {
 const bank = loadWordBank();
 const out: Definitions = {};
 const missing: string[] = [];
-for (const d of DIFFICULTIES) {
-  for (const w of bank[d]) {
-    const senses = define(w);
-    if (senses.length) out[w] = senses;
-    else missing.push(w);
-  }
+const allWords = new Set([...DIFFICULTIES.flatMap((d) => bank[d]), ...THEMES.flatMap((t) => (t === 'any' ? [] : wordsFor('medium', t)))]);
+for (const w of allWords) {
+  const senses = define(w);
+  if (senses.length) out[w] = senses;
+  else missing.push(w);
 }
 const file = join(ROOT, 'server', 'words', 'definitions.json');
 writeFileSync(file, JSON.stringify(out) + '\n');

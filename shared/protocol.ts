@@ -3,7 +3,7 @@
  * The server pushes one `state` message (a GameView) to each player whenever
  * anything changes; players send the actions below.
  */
-import type { Difficulty, TimerMode } from './config.js';
+import type { Difficulty, Theme, TimerMode } from './config.js';
 import type { CellPos, Direction, PuzzleView } from './puzzle.js';
 
 export type Phase = 'lobby' | 'writing' | 'reviewing' | 'solving' | 'finished';
@@ -131,6 +131,7 @@ export interface GameView {
   phase: Phase;
   difficulty: Difficulty;
   timerMode: TimerMode;
+  theme: Theme;
   you: string;
   players: PlayerInfo[];
   serverNow: number;
@@ -158,6 +159,7 @@ export interface ClientToServerEvents {
   'room:leave': () => void;
   'lobby:difficulty': (d: Difficulty) => void;
   'lobby:timer-mode': (m: TimerMode) => void;
+  'lobby:theme': (t: Theme) => void;
   'lobby:ready': (ready: boolean) => void;
   'write:intro-done': () => void;
   'write:goto': (index: number) => void;

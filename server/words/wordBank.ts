@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CONFIG, DIFFICULTIES, type Difficulty } from '../../shared/config.js';
+import { CONFIG, DIFFICULTIES, THEMES, type Difficulty, type Theme } from '../../shared/config.js';
 import { shuffle, type Rng } from '../grid/rng.js';
 
 const WORDS_DIR = dirname(fileURLToPath(import.meta.url));
@@ -35,6 +35,24 @@ export function loadWordBank(): WordBank {
   }
   cached = bank;
   return bank;
+}
+
+export function themeFilePath(theme: Exclude<Theme, 'any'>): string {
+  return join(WORDS_DIR, 'themes', `${theme}.txt`);
+}
+
+const themeCache = new Map<Theme, string[]>();
+
+/** The words a game draws from: a theme's list, or the difficulty list for 'any'. */
+export function wordsFor(difficulty: Difficulty, theme: Theme = 'any'): string[] {
+  if (theme === 'any' || !THEMES.includes(theme)) return loadWordBank()[difficulty];
+  let words = themeCache.get(theme);
+  if (!words) {
+    const valid = new RegExp(`^[A-Z]{${CONFIG.wordMinLength},${CONFIG.wordMaxLength}}$`);
+    words = [...new Set(parseWordFile(readFileSync(themeFilePath(theme), 'utf8')))].filter((w) => valid.test(w));
+    themeCache.set(theme, words);
+  }
+  return words;
 }
 
 /**

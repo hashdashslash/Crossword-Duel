@@ -1,4 +1,8 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { addBestClue, clueLibrarySaved, pickBestClue, resetClueLibraryCache } from '../server/words/clueLibrary.js';
 import type { GameResult, PlayerResult } from '../shared/protocol.js';
 import { definitionClue } from '../server/practice.js';
 import { clueContainsAnswer } from '../shared/rules.js';
@@ -33,5 +37,19 @@ describe('practice clues', () => {
       expect(clue).toBeTruthy();
       expect(clueContainsAnswer(clue!, word)).toBe(false);
     }
+  });
+});
+
+describe('best-clue library', () => {
+  it('saves voted clues, skips repeats and giveaways, and survives a reload', async () => {
+    process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'cd-lib-'));
+    resetClueLibraryCache();
+    expect(pickBestClue('OTTER')).toBeNull();
+    addBestClue('OTTER', 'River clown with a pocket for rocks');
+    addBestClue('otter', 'river clown with a pocket for rocks');
+    addBestClue('OTTER', 'Sea otter, obviously');
+    await clueLibrarySaved();
+    resetClueLibraryCache();
+    expect(pickBestClue('OTTER')).toBe('River clown with a pocket for rocks');
   });
 });

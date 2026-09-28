@@ -1,6 +1,7 @@
 /**
- * Single-player practice puzzles. Clues are dictionary definitions from the
- * built-in word list; a word with no usable definition gets its letters scrambled.
+ * Single-player practice puzzles. Clues are ones players voted "best clue" in
+ * duels when there are any, otherwise dictionary definitions; a word with
+ * neither gets its letters scrambled.
  */
 import { randomUUID } from 'node:crypto';
 import type { Difficulty } from '../shared/config.js';
@@ -10,6 +11,7 @@ import { generateSingleGrid } from './grid/puzzles.js';
 import { createRng, randomSeed, shuffle } from './grid/rng.js';
 import type { Grid } from './grid/types.js';
 import { checkEntries } from './solve/check.js';
+import { pickBestClue } from './words/clueLibrary.js';
 import { lookupDefinition } from './words/definitions.js';
 
 interface PracticeGame {
@@ -58,16 +60,25 @@ export function toPuzzleView(id: string, grid: Grid, clueText: (answer: string, 
   };
 }
 
-export function createPractice(difficulty: Difficulty): PuzzleView {
+/** Starts a solo game on `grid` (its timer and answer checks live on the server). */
+export function startSoloGame(grid: Grid, clueText: (answer: string, index: number) => string): PuzzleView {
   const now = Date.now();
   for (const [id, g] of games) if (now - g.startedAt > MAX_AGE_MS) games.delete(id);
-
-  const grid = generateSingleGrid(difficulty);
   const id = randomUUID();
-  const seed = randomSeed();
-  const view = toPuzzleView(id, grid, (answer, i) => definitionClue(answer) ?? `Unscramble: ${scramble(answer, seed + i)}`);
+  const view = toPuzzleView(id, grid, clueText);
   games.set(id, { grid, view, startedAt: now });
   return view;
+}
+
+export function createPractice(difficulty: Difficulty): PuzzleView {
+  const grid = generateSingleGrid(difficulty);
+  const seed = randomSeed();
+  return startSoloGame(grid, (answer, i) => pickBestClue(answer) ?? definitionClue(answer) ?? `Unscramble: ${scramble(answer, seed + i)}`);
+}
+
+/** Dictionary clue, or scrambled letters (the same for everyone given the same seed). */
+export function fixedClue(answer: string, seed: number): string {
+  return definitionClue(answer) ?? `Unscramble: ${scramble(answer, seed)}`;
 }
 
 export function checkPractice(id: string, entries: unknown): CheckResult | null {

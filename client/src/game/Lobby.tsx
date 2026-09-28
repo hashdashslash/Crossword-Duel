@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { CONFIG, poolSeconds, TIMER_MODES, type TimerMode } from '../../../shared/config';
+import { CONFIG, poolSeconds, THEME_LABELS, THEMES, TIMER_MODES, type TimerMode } from '../../../shared/config';
 import type { GameView, PlayerInfo } from '../../../shared/protocol';
 import { DifficultyPicker, LABELS } from '../components/DifficultyPicker';
 import { Logo, MuteButton } from '../components/ui';
@@ -93,6 +93,16 @@ export function Lobby({ view, me, opponent, socket, onLeave, banner }: Props) {
               <p className="difficulty-read">{LABELS[view.difficulty]}</p>
             )}
           </div>
+          <label className="field">
+            <span>Word theme {me.isHost ? '' : <span className="muted">(the host chooses)</span>}</span>
+            {me.isHost ? (
+              <select className="select" value={view.theme} onChange={(e) => socket.emit('lobby:theme', e.target.value as typeof view.theme)}>
+                {THEMES.map((t) => <option key={t} value={t}>{THEME_LABELS[t]}</option>)}
+              </select>
+            ) : (
+              <p className="difficulty-read">{THEME_LABELS[view.theme]}</p>
+            )}
+          </label>
           <div className="field">
             <span>Clue timer {me.isHost ? '' : <span className="muted">(the host chooses)</span>}</span>
             {me.isHost ? (

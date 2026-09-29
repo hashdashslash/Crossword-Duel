@@ -61,9 +61,28 @@ function raw(e: unknown): string {
   return e instanceof Error ? `${e.name}: ${e.message}` : String(e);
 }
 
+/**
+ * The key as pasted into the host's settings, minus the usual copy-paste
+ * accidents: surrounding spaces or quotes, or a leading "ANTHROPIC_API_KEY=".
+ */
+export function cleanApiKey(value: string | undefined): string {
+  let key = (value ?? '').trim();
+  key = key.replace(/^ANTHROPIC_API_KEY\s*=\s*/, '');
+  key = key.replace(/^(["'])(.*)\1$/, '$2').trim();
+  return key;
+}
+
+/** A safe description of the key for the log (never the key itself), to compare with the console's key list. */
+export function describeApiKey(key: string): string {
+  if (!key) return 'empty';
+  const shape = key.startsWith('sk-ant-') ? 'starts with sk-ant-' : `does NOT start with sk-ant- (starts with "${key.slice(0, 3)}")`;
+  return `${shape}, ends in ...${key.slice(-4)}, ${key.length} characters${/\s/.test(key) ? ', contains spaces' : ''}`;
+}
+
 export class AnthropicClueAI implements ClueAI {
   readonly mode = 'anthropic' as const;
-  readonly client = new Anthropic({ maxRetries: 0 });
+  readonly apiKey = cleanApiKey(process.env.ANTHROPIC_API_KEY);
+  readonly client = new Anthropic({ apiKey: this.apiKey, maxRetries: 0 });
 
   /** Runs a structured-output request, trying each model in turn until one succeeds. */
   private async ask<T extends z.ZodType>(
@@ -185,7 +204,7 @@ export class AnthropicClueAI implements ClueAI {
  * tiny request. Returns human-readable lines for the log.
  */
 export async function runAISelfTest(ai: AnthropicClueAI): Promise<{ ok: boolean; lines: string[] }> {
-  const lines: string[] = [];
+  const lines: string[] = [`  key: ${describeApiKey(ai.apiKey)}`];
   let ok = true;
   const models = [...new Set([CONFIG.ai.quickCheckModel, CONFIG.ai.reviewModel, CONFIG.ai.hintModel, CONFIG.ai.fallbackModel])];
   for (const model of models) {

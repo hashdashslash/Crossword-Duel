@@ -82,7 +82,13 @@ export function describeApiKey(key: string): string {
 export class AnthropicClueAI implements ClueAI {
   readonly mode = 'anthropic' as const;
   readonly apiKey = cleanApiKey(process.env.ANTHROPIC_API_KEY);
-  readonly client = new Anthropic({ apiKey: this.apiKey, maxRetries: 0 });
+  /** Only needed for keys that aren't tied to one workspace; Anthropic asks for the workspace id then. */
+  readonly workspaceId = (process.env.ANTHROPIC_WORKSPACE_ID ?? '').trim();
+  readonly client = new Anthropic({
+    apiKey: this.apiKey,
+    maxRetries: 0,
+    defaultHeaders: this.workspaceId ? { 'anthropic-workspace-id': this.workspaceId } : undefined,
+  });
 
   /** Runs a structured-output request, trying each model in turn until one succeeds. */
   private async ask<T extends z.ZodType>(
@@ -204,7 +210,7 @@ export class AnthropicClueAI implements ClueAI {
  * tiny request. Returns human-readable lines for the log.
  */
 export async function runAISelfTest(ai: AnthropicClueAI): Promise<{ ok: boolean; lines: string[] }> {
-  const lines: string[] = [`  key: ${describeApiKey(ai.apiKey)}`];
+  const lines: string[] = [`  key: ${describeApiKey(ai.apiKey)}`, `  workspace: ${ai.workspaceId || 'not set (only needed if the key is not tied to a workspace)'}`];
   let ok = true;
   const models = [...new Set([CONFIG.ai.quickCheckModel, CONFIG.ai.reviewModel, CONFIG.ai.hintModel, CONFIG.ai.fallbackModel])];
   for (const model of models) {

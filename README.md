@@ -82,6 +82,7 @@ the review and hints use Claude Opus 5. You can change models in `shared/config.
 2. Click **New → Blueprint**, choose this repository and the branch with the latest code. Render
    reads `render.yaml` and sets everything up.
 3. When asked for **ANTHROPIC_API_KEY**, paste your key (or leave it empty for pretend mode).
+   If the log says the key "is not scoped to a workspace", also add **ANTHROPIC_WORKSPACE_ID** with the workspace id from the Anthropic Console (it starts with `wrkspc_`), or make a new key inside a workspace.
 4. Click **Apply**. After a few minutes you'll get an address like
    `https://crossword-duel.onrender.com`. Share it!
 

@@ -41,7 +41,9 @@ export const CONFIG = {
     /** If the main model errors or is slow, the request is retried once on this faster model. */
     fallbackModel: 'claude-haiku-4-5',
     /** Model that writes the daily puzzle's clues (once per day, cached). */
-    dailyClueModel: 'claude-opus-5',
+    dailyClueModel: 'claude-opus-5-5',
+    /** Model for the two critics that score the daily's candidate clues (half the price of the writer). */
+    dailyCriticModel: 'claude-sonnet-5-5',
     /** Candidate clues the AI writes per daily answer; two critic passes pick the best. */
     dailyCandidates: 6,
     /** How long the main model gets before switching to the fallback model (ms). */

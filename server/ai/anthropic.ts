@@ -34,6 +34,13 @@ const CrosswordCritique = z.object({
 });
 const Define = z.object({ senses: z.array(z.object({ pos: z.string(), text: z.string() })) });
 
+/**
+ * Replies allowed more tokens than this are streamed. (The SDK throws for a
+ * non-streaming request whose max_tokens implies more than 10 minutes, which
+ * is anything over about 21,000 tokens.)
+ */
+const STREAM_ABOVE_TOKENS = 16_000;
+
 interface Attempt {
   model: string;
   /** Max time for this attempt (ms); the overall signal still applies. */
@@ -90,20 +97,22 @@ export class AnthropicClueAI implements ClueAI {
       const attemptSignal = attempt.ms ? AbortSignal.any([signal, AbortSignal.timeout(attempt.ms)]) : signal;
       const started = Date.now();
       try {
-        const res = await this.client.messages.parse(
-          {
-            model: attempt.model,
-            max_tokens: maxTokens,
-            system,
-            messages: [{ role: 'user', content: user }],
-            output_config: {
-              format: zodOutputFormat(schema),
-              // Haiku 4.5 doesn't support the effort setting; the others run at low effort for speed.
-              ...(attempt.model.startsWith('claude-haiku') ? {} : { effort: attempt.effort ?? ('low' as const) }),
-            },
+        const params = {
+          model: attempt.model,
+          max_tokens: maxTokens,
+          system,
+          messages: [{ role: 'user' as const, content: user }],
+          output_config: {
+            format: zodOutputFormat(schema),
+            // Haiku 4.5 doesn't support the effort setting; the others run at low effort for speed.
+            ...(attempt.model.startsWith('claude-haiku') ? {} : { effort: attempt.effort ?? ('low' as const) }),
           },
-          { signal: attemptSignal },
-        );
+        };
+        // Big replies (the daily clues) must stream: the SDK refuses a plain
+        // request that could run past 10 minutes, before sending anything.
+        const res = maxTokens > STREAM_ABOVE_TOKENS
+          ? await this.client.messages.stream(params, { signal: attemptSignal }).finalMessage()
+          : await this.client.messages.parse(params, { signal: attemptSignal });
         if (res.stop_reason === 'refusal') throw new AIError('the AI declined this request', false);
         if (res.stop_reason === 'max_tokens') throw new AIError('the AI reply was cut off', false);
         if (!res.parsed_output) throw new AIError(`the AI gave no usable reply (${res.stop_reason})`, false);
@@ -131,7 +140,10 @@ export class AnthropicClueAI implements ClueAI {
   private async askText(label: string, system: string, user: string, model: string, signal: AbortSignal, maxTokens = 300): Promise<string> {
     const started = Date.now();
     try {
-      const res = await this.client.messages.create({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }, { signal });
+      const params = { model, max_tokens: maxTokens, system, messages: [{ role: 'user' as const, content: user }] };
+      const res = maxTokens > STREAM_ABOVE_TOKENS
+        ? await this.client.messages.stream(params, { signal }).finalMessage()
+        : await this.client.messages.create(params, { signal });
       const text = res.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join(' ');
       console.log(`[ai] ${label}: ok with ${model} in ${Date.now() - started} ms`);
       return text;

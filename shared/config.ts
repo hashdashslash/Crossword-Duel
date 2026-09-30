@@ -5,8 +5,6 @@
 export const CONFIG = {
   // ── Game rules ────────────────────────────────────────────
   wordsPerGrid: 15,
-  /** Difficulty of the daily puzzle. */
-  dailyDifficulty: 'medium' as 'easy' | 'medium' | 'hard',
   secondsPerClue: 30,
   clueCharLimit: 150,
   /** The live counter turns blue once this many characters are typed. */
@@ -42,6 +40,8 @@ export const CONFIG = {
     hintModel: 'claude-opus-5',
     /** If the main model errors or is slow, the request is retried once on this faster model. */
     fallbackModel: 'claude-haiku-4-5',
+    /** Model that writes the daily puzzle's clues (once per day, cached). */
+    dailyClueModel: 'claude-opus-5',
     /** How long the main model gets before switching to the fallback model (ms). */
     reviewPrimaryMs: 10000,
     hintPrimaryMs: 6000,

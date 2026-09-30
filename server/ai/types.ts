@@ -28,6 +28,16 @@ export interface ClueAI {
   alternativeClue(answer: string, avoid: string[], difficulty: Difficulty, signal: AbortSignal): Promise<string>;
   /** Short dictionary-style definitions (used when the built-in dictionary has no entry). */
   define(word: string, signal: AbortSignal): Promise<{ pos: string; text: string }[]>;
+  /**
+   * Original, Sunday-newspaper-style clues for a batch of answers (the daily puzzle).
+   * May return fewer clues than asked for; the caller fills any gaps.
+   */
+  writeCrosswordClues(items: CrosswordClueRequest[], signal: AbortSignal): Promise<{ id: string; clue: string }[]>;
+}
+
+export interface CrosswordClueRequest {
+  id: string;
+  answer: string;
 }
 
 /** Runs `fn` with an abort signal that fires after `ms`; rejects on timeout. */

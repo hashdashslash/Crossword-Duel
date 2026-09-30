@@ -192,7 +192,7 @@ export function SolveScreen(props: Props) {
   );
 
   return (
-    <div className={`solve ${isTouch ? 'touch' : ''}`}>
+    <div className={`solve ${isTouch ? 'touch' : ''} ${puzzle.cols > 15 ? 'big' : ''}`}>
       <header className="solve-header">
         {props.onExit && <button className="ghost icon" onClick={props.onExit} aria-label="Back to menu">←</button>}
         <div className="solve-title">

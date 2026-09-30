@@ -56,9 +56,9 @@ export function createGameServer(opts: { ai: ClueAI; db?: Db | null }) {
     }
   });
 
-  app.post('/api/daily', (req, res) => {
+  app.post('/api/daily', async (req, res) => {
     try {
-      const daily = createDaily(req.body?.date);
+      const daily = await createDaily(req.body?.date, opts, { resumeMs: req.body?.resumeMs });
       if ('error' in daily) {
         res.status(400).json(daily);
         return;

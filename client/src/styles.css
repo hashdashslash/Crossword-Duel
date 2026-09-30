@@ -134,6 +134,10 @@ h1, h2 { margin: 0; }
 .board-col { flex: 0 1 580px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 
 .grid-wrap { width: 100%; }
+/* Sunday-size (21×21) daily grid: a wider board column on desktop, and a scrollable grid if space runs short. */
+.solve.big { max-width: 1440px; }
+.solve.big .board-col { flex-basis: 760px; }
+.solve.big:not(.touch) .grid-scroll { overflow-x: auto; }
 .grid {
   display: grid;
   gap: 1px;

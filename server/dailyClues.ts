@@ -311,6 +311,11 @@ async function recentClues(db: Db | null | undefined, date: string, grid: Grid, 
   return out;
 }
 
+/** Whether the date's clues were written by the AI and saved (not dictionary stand-ins). */
+export function dailyCluesSaved(date: string): boolean {
+  return memory.get(date)?.saved ?? false;
+}
+
 /** The clues for a date's grid, in the same order as `grid.words`. */
 export function dailyClues(date: string, grid: Grid, deps: { ai: ClueAI; db?: Db | null; gridFor?: (date: string) => Grid }): Promise<string[]> {
   const signature = gridSignature(grid);

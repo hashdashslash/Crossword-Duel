@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MockClueAI } from '../server/ai/mock.js';
 import type { ClueScore, CrosswordClueRequest, CrosswordClueReviewItem } from '../server/ai/types.js';
 import { createGameServer } from '../server/app.js';
-import { createDaily, dailyGrid, loadDailyGrids } from '../server/daily.js';
+import { createDaily, dailyGrid, loadDailyGrids, pacificClock } from '../server/daily.js';
 import { acceptClue, candidateProblem, clueTemplate, dailyClues, pickClues, type Scored } from '../server/dailyClues.js';
 import { embedded, migrate } from '../server/db/index.js';
 import { createRng } from '../server/grid/rng.js';
@@ -141,6 +141,12 @@ describe('daily clues', () => {
       { clue: 'Solid clue', scores: [{ ...good, delight: 1 }, { ...good, delight: 1 }] },
     ]];
     expect(pickClues(pools)).toEqual(['Solid clue']);
+  });
+
+  it('tells the time in California, daylight saving included', () => {
+    expect(pacificClock(new Date('2026-10-01T09:30:00Z'))).toEqual({ date: '2026-10-01', hour: 2 }); // PDT
+    expect(pacificClock(new Date('2026-12-01T10:15:00Z'))).toEqual({ date: '2026-12-01', hour: 2 }); // PST
+    expect(pacificClock(new Date('2026-12-01T07:59:00Z'))).toEqual({ date: '2026-11-30', hour: 23 });
   });
 
   it('falls back to dictionary clues without the AI', async () => {

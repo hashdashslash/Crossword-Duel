@@ -14,7 +14,7 @@ import { DAILY_START, dailyNumber } from '../shared/daily.js';
 import type { PuzzleView } from '../shared/puzzle.js';
 import type { ClueAI } from './ai/types.js';
 import type { Db } from './db/index.js';
-import { dailyClues } from './dailyClues.js';
+import { dailyClues, dailyCluesSaved } from './dailyClues.js';
 import { gridFromRows } from './grid/sunday.js';
 import type { Grid } from './grid/types.js';
 import { startSoloGame } from './practice.js';
@@ -83,20 +83,55 @@ export async function createDaily(
   return { puzzle, number: dailyNumber(day), date: day };
 }
 
-/** Writes and saves the clues for yesterday, today and tomorrow (server time), so players rarely wait. */
+/** The daily clues are written and edited at this hour, Pacific time. */
+export const WRITE_HOUR_PACIFIC = 2;
+
+/** The date and hour in California (Pacific time, with daylight saving). */
+export function pacificClock(now = new Date()): { date: string; hour: number } {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+  }).formatToParts(now).map((p) => [p.type, p.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
+}
+
+const addDays = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+
+/**
+ * Writes and edits the daily clues ahead of time, so players rarely wait:
+ * every night at 2am Pacific for the next day (the first places on Earth
+ * reach it about then), retrying later if the AI fails. After a restart it
+ * also makes sure the days players could be on right now are ready.
+ */
 export function prepareDailyClues(deps: { ai: ClueAI; db?: Db | null }) {
   if (deps.ai.mode !== 'anthropic') return;
-  const run = async () => {
-    for (const offset of [0, 1, -1]) {
-      const date = new Date(Date.now() + offset * DAY_MS).toISOString().slice(0, 10);
+  const prepare = async (dates: string[]): Promise<boolean> => {
+    let allSaved = true;
+    for (const date of dates) {
       if (dailyDateError(date)) continue;
       try {
         await dailyClues(date, dailyGrid(date), { ...deps, gridFor: dailyGrid });
+        allSaved &&= dailyCluesSaved(date);
       } catch (e) {
+        allSaved = false;
         console.warn(`[daily] could not prepare clues for ${date}:`, (e as Error).message);
       }
     }
+    return allSaved;
   };
-  void run();
-  setInterval(() => void run(), 60 * 60 * 1000).unref();
+  // Yesterday, today and tomorrow in UTC cover every time zone.
+  void prepare([0, 1, -1].map((offset) => new Date(Date.now() + offset * DAY_MS).toISOString().slice(0, 10)));
+
+  let doneFor = '';
+  let running = false;
+  const nightly = async () => {
+    const { date, hour } = pacificClock();
+    if (hour < WRITE_HOUR_PACIFIC || doneFor === date || running) return;
+    running = true;
+    try {
+      if (await prepare([date, addDays(date, 1)])) doneFor = date;
+    } finally {
+      running = false;
+    }
+  };
+  setInterval(() => void nightly(), 10 * 60_000).unref();
 }

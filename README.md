@@ -171,8 +171,11 @@ later to pick up where you stopped), and **Share** copies a line like
   kept only if both pass it and neither doubts its facts. The best clue per answer is picked,
   keeping any one pattern ("?" puns, fill-in-the-blanks, "e.g." clues) to a tenth of the puzzle.
   The clues are saved in the database so everyone gets the same clues, even after a restart. The server
-  writes the next day's clues in advance; if a player arrives first, they see "Writing today's
-  clues…" for several minutes. Without an API key (or if the AI fails) the puzzle falls back to
+  writes and edits the next day's clues every night at 2am Pacific time (and, after a restart,
+  any day players could be on right now); if a player arrives before they're ready, they see
+  "Writing and editing today's clues…" for several minutes. On Render's free plan the server
+  sleeps when nobody is playing, so if it's asleep at 2am the clues are written when it next
+  wakes. Without an API key (or if the AI fails) the puzzle falls back to
   dictionary clues, which are not saved, so the AI tries again later.
 
 **Dark mode** follows your device's setting.

@@ -19,7 +19,7 @@ import wordListPath from 'word-list';
 import { DIFFICULTIES, THEMES } from '../shared/config.js';
 import { ROOT } from '../server/app.js';
 import { loadWordBank, wordsFor } from '../server/words/wordBank.js';
-import { isBlocked } from '../server/words/blocked.js';
+import { isBlocked, isCrosswordese } from '../server/words/blocked.js';
 
 const require = createRequire(import.meta.url);
 const DICT = join(dirname(require.resolve('wordnet-db/package.json')), 'dict');
@@ -37,20 +37,23 @@ for (const line of readFileSync(join(DICT, 'index.sense'), 'utf8').split('\n')) 
   tagCount.set(lemma, (tagCount.get(lemma) ?? 0) + Number(count));
 }
 
-// Lemma → number of senses (all parts of speech).
+// Lemma → number of senses (all parts of speech), and which parts of speech it has.
 const senses = new Map<string, number>();
+const partsOfSpeech = new Map<string, Set<string>>();
 for (const pos of ['noun', 'verb', 'adj', 'adv']) {
   for (const line of readFileSync(join(DICT, `index.${pos}`), 'utf8').split('\n')) {
     if (!line || line.startsWith(' ')) continue;
     const f = line.split(' ');
     senses.set(f[0]!, (senses.get(f[0]!) ?? 0) + Number(f[2]));
+    const key = f[0]!.toUpperCase();
+    partsOfSpeech.set(key, (partsOfSpeech.get(key) ?? new Set()).add(pos));
   }
 }
 
 const scores = new Map<string, number>();
 const offer = (word: string, score: number) => {
   if (word.length < MIN_LEN || word.length > MAX_LEN || !/^[A-Z]+$/.test(word)) return;
-  if (isBlocked(word)) return;
+  if (isBlocked(word) || isCrosswordese(word)) return;
   if (score > (scores.get(word) ?? 0)) scores.set(word, score);
 };
 
@@ -83,26 +86,33 @@ for (const lemma of senses.keys()) {
   }
 }
 
-// Inflected forms (plurals, -ED, -ING, -ER, -EST) of good words, when the dictionary has them.
-const stems = (w: string): string[] => {
-  const out: string[] = [];
-  const add = (suffix: string, ...repl: string[]) => {
+// Inflected forms of good words, when the dictionary has them and they fit the
+// base word's part of speech: plurals and -S verbs of nouns and verbs, -ED and
+// -ING of verbs only, -ER and -EST of adjectives only. That keeps out invented
+// forms like DUED (DUE isn't a verb), WEIRED (a weir is a noun) and INSISTER.
+const stems = (w: string): { stem: string; needs: string[] }[] => {
+  const out: { stem: string; needs: string[] }[] = [];
+  const add = (suffix: string, needs: string[], ...repl: string[]) => {
     if (!w.endsWith(suffix)) return;
     const stem = w.slice(0, -suffix.length);
-    for (const r of repl) out.push(stem + r);
-    if (/([B-DF-HJ-NP-TV-Z])\1$/.test(stem)) out.push(stem.slice(0, -1)); // STOPPED → STOP
+    for (const r of repl) out.push({ stem: stem + r, needs });
+    // STOPPED → STOP, BIGGEST → BIG (never for plurals: RAGGS is not RAG + S).
+    if (!needs.includes('noun') && /([B-DF-HJ-NP-TV-Z])\1$/.test(stem)) out.push({ stem: stem.slice(0, -1), needs });
   };
-  add('S', ''); add('ES', ''); add('IES', 'Y');
-  add('ED', '', 'E'); add('D', ''); add('IED', 'Y');
-  add('ING', '', 'E');
-  add('ER', '', 'E'); add('R', ''); add('IER', 'Y');
-  add('EST', '', 'E'); add('ST', ''); add('IEST', 'Y');
+  const plural = ['noun', 'verb'], verb = ['verb'], adj = ['adj'];
+  add('S', plural, ''); add('ES', plural, ''); add('IES', plural, 'Y');
+  add('ED', verb, '', 'E'); add('D', verb, ''); add('IED', verb, 'Y');
+  add('ING', verb, '', 'E');
+  add('ER', adj, '', 'E'); add('R', adj, ''); add('IER', adj, 'Y');
+  add('EST', adj, '', 'E'); add('ST', adj, ''); add('IEST', adj, 'Y');
   return out;
 };
 for (const word of dictionary) {
   if (base.has(word) || word.length < 4) continue;
   let best = 0;
-  for (const s of stems(word)) best = Math.max(best, base.get(s) ?? 0);
+  for (const { stem, needs } of stems(word)) {
+    if (stem.length >= 3 && needs.some((pos) => partsOfSpeech.get(stem)?.has(pos))) best = Math.max(best, base.get(stem) ?? 0);
+  }
   if (best >= 60) offer(word, best - 10);
 }
 

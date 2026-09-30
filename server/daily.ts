@@ -74,7 +74,7 @@ export async function createDaily(
   const grid = dailyGrid(day);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const clues = await Promise.race([
-    dailyClues(day, grid, deps),
+    dailyClues(day, grid, { ...deps, gridFor: dailyGrid }),
     new Promise<null>((r) => { timer = setTimeout(() => r(null), opts.waitMs ?? 20_000); }),
   ]).finally(() => clearTimeout(timer));
   if (!clues) return { pending: true };
@@ -91,7 +91,7 @@ export function prepareDailyClues(deps: { ai: ClueAI; db?: Db | null }) {
       const date = new Date(Date.now() + offset * DAY_MS).toISOString().slice(0, 10);
       if (dailyDateError(date)) continue;
       try {
-        await dailyClues(date, dailyGrid(date), deps);
+        await dailyClues(date, dailyGrid(date), { ...deps, gridFor: dailyGrid });
       } catch (e) {
         console.warn(`[daily] could not prepare clues for ${date}:`, (e as Error).message);
       }

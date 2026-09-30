@@ -3,7 +3,7 @@
  * any clue containing the word "wrong" is treated as invalid.
  */
 import type { Difficulty } from '../../shared/config.js';
-import type { ClueAI, CrosswordClueRequest, QuickCheckResult, ReviewItem, ReviewVerdict } from './types.js';
+import type { ClueAI, CrosswordCandidates, CrosswordClueContext, CrosswordClueRequest, CrosswordClueReview, CrosswordClueReviewItem, QuickCheckResult, ReviewItem, ReviewVerdict } from './types.js';
 
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -47,7 +47,11 @@ export class MockClueAI implements ClueAI {
   }
 
   /** Test mode has no clue writer; the daily puzzle falls back to dictionary clues. */
-  async writeCrosswordClues(_items: CrosswordClueRequest[], _signal: AbortSignal): Promise<{ id: string; clue: string }[]> {
+  async writeCrosswordClues(_items: CrosswordClueRequest[], _context: CrosswordClueContext, _signal?: AbortSignal): Promise<CrosswordCandidates[]> {
+    return [];
+  }
+
+  async reviewCrosswordClues(_items: CrosswordClueReviewItem[], _critic: 0 | 1, _signal?: AbortSignal): Promise<CrosswordClueReview[]> {
     return [];
   }
 

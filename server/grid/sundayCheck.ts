@@ -2,7 +2,7 @@
  * Independent checker for daily (Sunday-size) grids. It re-derives everything
  * from the letters and reports every rule that is broken.
  */
-import { isBlocked } from '../words/blocked.js';
+import { isBlocked, isCrosswordese } from '../words/blocked.js';
 import { loadFillWords, runsOf, SUNDAY, type Pattern } from './sunday.js';
 import type { Grid } from './types.js';
 
@@ -54,6 +54,7 @@ export function validateSundayGrid(grid: Grid, opts = SUNDAY): string[] {
   for (const a of answers) {
     if (!known.has(a)) errors.push(`${a} is not in the word list`);
     if (isBlocked(a)) errors.push(`${a} is a blocked word`);
+    if (isCrosswordese(a)) errors.push(`${a} is crosswordese`);
   }
   return errors;
 }

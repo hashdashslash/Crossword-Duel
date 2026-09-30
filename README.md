@@ -157,14 +157,22 @@ later to pick up where you stopped), and **Share** copies a line like
 - *Grids* are built ahead of time and stored in `server/grid/daily-grids.txt`, one per day
   (filling a 21×21 grid takes far more computing than Render's free plan has). The words come
   from `server/words/fill.txt`, a scored list built from the WordNet dictionary and the game's own
-  word lists (`npm run words:fill`); a few words are never used (`server/words/blocked.ts`).
+  word lists (`npm run words:fill`); offensive words and crosswordese (ERE, ASEA, ETUI…) are
+  never used (`server/words/blocked.ts`). After adding to those lists, `npm run daily:repair`
+  swaps the words out of the existing grids, keeping each day's grid number.
   To add more days, run `npm run daily:build -- 800` (it keeps going until the file has that
   many grids, using every CPU core). If the file ever runs out, the days start over from #1.
-- *Clues* are written by the AI once per day, in the style of a Sunday newspaper crossword:
-  witty, misdirecting and original (the AI is told never to reuse published clues). They are
-  saved in the database so everyone gets the same clues, even after a restart. The server
+- *Clues* follow a clue-first crossword playbook: fair, precise misdirection that is literally
+  true once you see it. Once per day the AI writes six candidate clues per answer in different
+  styles; code rejects any that give the answer away, use another grid answer, run over 100
+  characters, repeat a clue from the last 90 days or a well-known published clue, or put
+  misdirection next to a less familiar word. Two separate AI critics (an editor and a test
+  solver) score the rest on accuracy, fairness, freshness, surface and delight, and a clue is
+  kept only if both pass it and neither doubts its facts. The best clue per answer is picked,
+  keeping any one pattern ("?" puns, fill-in-the-blanks, "e.g." clues) to a tenth of the puzzle.
+  The clues are saved in the database so everyone gets the same clues, even after a restart. The server
   writes the next day's clues in advance; if a player arrives first, they see "Writing today's
-  clues…" for a minute or two. Without an API key (or if the AI fails) the puzzle falls back to
+  clues…" for a few minutes. Without an API key (or if the AI fails) the puzzle falls back to
   dictionary clues, which are not saved, so the AI tries again later.
 
 **Dark mode** follows your device's setting.
@@ -204,6 +212,7 @@ The word lists are plain text files (one word per line) in `server/words/`
 | `npm run grid:stress` | Build 1,200 grids and check every rule |
 | `npm run words:check` | Check the word lists for typos and duplicates |
 | `npm run daily:build -- 800` | Add daily-puzzle grids until there are 800 |
+| `npm run daily:repair` | Re-check the daily grids and fix any that use a newly banned word |
 | `npm run ai:check` | Check your Anthropic API key, credit and model access |
 | `npm run build` then `npm start` | Run the production version (what Render runs) |
 

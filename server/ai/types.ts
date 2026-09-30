@@ -29,15 +29,57 @@ export interface ClueAI {
   /** Short dictionary-style definitions (used when the built-in dictionary has no entry). */
   define(word: string, signal: AbortSignal): Promise<{ pos: string; text: string }[]>;
   /**
-   * Original, Sunday-newspaper-style clues for a batch of answers (the daily puzzle).
-   * May return fewer clues than asked for; the caller fills any gaps.
+   * Several original candidate clues per answer for the daily puzzle, each in
+   * a different style. May return fewer than asked for; the caller fills gaps.
    */
-  writeCrosswordClues(items: CrosswordClueRequest[], signal: AbortSignal): Promise<{ id: string; clue: string }[]>;
+  writeCrosswordClues(items: CrosswordClueRequest[], context: CrosswordClueContext, signal: AbortSignal): Promise<CrosswordCandidates[]>;
+  /**
+   * Scores candidate clues against the playbook's rubric. `critic` picks one
+   * of two independent passes (0: editor, 1: test solver).
+   */
+  reviewCrosswordClues(items: CrosswordClueReviewItem[], critic: 0 | 1, signal: AbortSignal): Promise<CrosswordClueReview[]>;
 }
 
 export interface CrosswordClueRequest {
   id: string;
   answer: string;
+  /** Crosses a less familiar answer, so it needs a straight, fair clue (no misdirection). */
+  straight?: boolean;
+  /** Clues not to repeat: this answer's clues from recent daily puzzles, or ones an editor rejected. */
+  avoid?: string[];
+}
+
+export interface CrosswordClueContext {
+  /** Every answer in the grid; no clue may use one of them as a word. */
+  gridAnswers: string[];
+}
+
+export interface CrosswordCandidates {
+  id: string;
+  candidates: { clue: string; technique: string }[];
+}
+
+export interface CrosswordClueReviewItem {
+  id: string;
+  answer: string;
+  clues: string[];
+}
+
+/** Rubric scores for one clue: each criterion 0 (bad) to 3 (excellent). */
+export interface ClueScore {
+  accuracy: number;
+  fairness: number;
+  freshness: number;
+  surface: number;
+  delight: number;
+  /** Whether the clue relies on a fact, and if so whether the critic is sure it is true. */
+  facts: 'none' | 'sure' | 'unsure';
+}
+
+export interface CrosswordClueReview {
+  id: string;
+  /** One score per clue, in the order given. */
+  scores: (ClueScore & { index: number })[];
 }
 
 /** Runs `fn` with an abort signal that fires after `ms`; rejects on timeout. */

@@ -178,7 +178,8 @@ later to pick up where you stopped), and **Share** copies a line like
   any day players could be on right now); if a player arrives before they're ready, they see
   "Writing and editing today's clues…" for several minutes. On Render's free plan the server
   sleeps when nobody is playing, so if it's asleep at 2am the clues are written when it next
-  wakes. Players never get stand-in clues on the daily: if the AI fails, the day keeps showing
+  wakes. While writing, the server keeps itself awake, and its work in progress is saved in the
+  database, so a restart picks up where it left off instead of paying for the same clues twice. Players never get stand-in clues on the daily: if the AI fails, the day keeps showing
   "Writing and editing today's clues…" and is tried again a few minutes later. Only without an
   API key at all (local development) does the puzzle use dictionary clues.
 

@@ -24,6 +24,11 @@
  * today's clues…"), and a failed attempt is retried a few minutes later
  * (then less and less often). A retry keeps everything already written and
  * only asks for the answers still missing a clue, so it costs little.
+ *
+ * Work in progress is saved in the database after each step, so a restart
+ * (an update, or Render's free plan putting the server to sleep) picks up
+ * where it left off instead of paying for the same clues twice. While
+ * writing, the server also keeps itself awake on Render.
  * Only without an API key at all (local play, tests) do dictionary clues fill in.
  */
 import { createHash } from 'node:crypto';
@@ -61,8 +66,42 @@ const inflight = new Map<string, Promise<string[] | null>>();
  * An unfinished day: the candidates written and scored so far (kept so a
  * retry only pays for what's missing), and when to try again.
  */
-interface Draft { signature: string; pools: Scored[][]; rejected: string[][]; failures: number; retryAt: number }
+interface Draft {
+  signature: string;
+  pools: Scored[][];
+  rejected: string[][];
+  /** Candidates written but not yet scored by the critics: [answer index, clues]. */
+  pending: [number, string[]][];
+  /** Writing rounds done so far. */
+  rounds: number;
+  failures: number;
+  retryAt: number;
+}
 const drafts = new Map<string, Draft>();
+
+/**
+ * Render's free plan puts the server to sleep 15 minutes after the last
+ * visit, even in the middle of a task. While clues are being written the
+ * server visits its own public address every few minutes, so it stays awake
+ * until they're done (and can sleep again afterwards).
+ */
+const KEEP_AWAKE_MS = 4 * 60_000;
+let writing = 0;
+let keepAwakeTimer: ReturnType<typeof setInterval> | null = null;
+function keepAwake(on: boolean) {
+  const url = process.env.RENDER_EXTERNAL_URL;
+  if (!url) return;
+  writing += on ? 1 : -1;
+  if (writing > 0 && !keepAwakeTimer) {
+    keepAwakeTimer = setInterval(() => {
+      void fetch(`${url}/api/config`, { signal: AbortSignal.timeout(10_000) }).catch(() => {});
+    }, KEEP_AWAKE_MS);
+    keepAwakeTimer.unref();
+  } else if (writing === 0 && keepAwakeTimer) {
+    clearInterval(keepAwakeTimer);
+    keepAwakeTimer = null;
+  }
+}
 
 /** Identifies the grid, so saved clues are never used with a different grid. */
 export function gridSignature(grid: Grid): string {
@@ -218,17 +257,18 @@ function batches<T>(items: T[]): T[][] {
   return out;
 }
 
-/** Writes candidates for `requests`, applies the hard rules, and has both critics score what's left. */
-async function draftRound(grid: Grid, ai: ClueAI, requests: CrosswordClueRequest[], rules: { gridAnswers: Set<string>; recent: string[][]; straight: boolean[] },
-  pools: Scored[][], rejected: string[][], signal: AbortSignal) {
+type Rules = { gridAnswers: Set<string>; recent: string[][]; straight: boolean[] };
+
+/** Writes candidates for `requests` and applies the hard rules; what's left waits in `draft.pending` for the critics. */
+async function writeCandidates(grid: Grid, ai: ClueAI, requests: CrosswordClueRequest[], rules: Rules, draft: Draft, signal: AbortSignal) {
   const gridAnswers = [...rules.gridAnswers];
-  const fresh = new Map<number, string[]>();
+  const { pools, rejected } = draft;
   await limited(batches(requests).map((batch) => async () => {
     try {
       for (const { id, candidates } of await ai.writeCrosswordClues(batch, { gridAnswers }, signal)) {
         const i = Number(id);
         const answer = grid.words[i]?.answer;
-        if (!answer || !batch.some((b) => b.id === id)) continue;
+        if (!answer || !batch.some((b) => b.id === id) || draft.pending.some(([p]) => p === i)) continue;
         const kept: string[] = [];
         for (const { clue } of candidates) {
           const problem = candidateProblem(clue, answer, { gridAnswers: rules.gridAnswers, recent: rules.recent[i]!, straight: rules.straight[i]! });
@@ -236,13 +276,17 @@ async function draftRound(grid: Grid, ai: ClueAI, requests: CrosswordClueRequest
           if (problem || !clean) { if (clean) rejected[i]!.push(clean); continue; }
           if (!kept.includes(clean) && !pools[i]!.some((p) => p.clue === clean)) kept.push(clean);
         }
-        fresh.set(i, kept);
+        if (kept.length) draft.pending.push([i, kept]);
       }
     } catch (e) {
       console.warn('[daily] a batch of candidate clues failed:', (e as Error).message);
     }
   }));
-  const items = [...fresh].filter(([, clues]) => clues.length).map(([i, clues]) => ({ id: String(i), answer: grid.words[i]!.answer, clues }));
+}
+
+/** Has both critics score the candidates waiting in `draft.pending`, then adds them to the pools. */
+async function scoreCandidates(grid: Grid, ai: ClueAI, draft: Draft, signal: AbortSignal) {
+  const items = draft.pending.map(([i, clues]) => ({ id: String(i), answer: grid.words[i]!.answer, clues }));
   const scores = new Map<number, (ClueScore | undefined)[][]>(items.map((it) => [Number(it.id), it.clues.map(() => [undefined, undefined])]));
   await limited(([0, 1] as const).flatMap((critic) => batches(items).map((batch) => async () => {
     try {
@@ -259,10 +303,20 @@ async function draftRound(grid: Grid, ai: ClueAI, requests: CrosswordClueRequest
     const i = Number(it.id);
     it.clues.forEach((clue, k) => {
       const scored = { clue, scores: scores.get(i)![k]!.filter((x): x is ClueScore => !!x) };
-      pools[i]!.push(scored);
-      if (!passes(scored)) rejected[i]!.push(clue);
+      draft.pools[i]!.push(scored);
+      if (!passes(scored)) draft.rejected[i]!.push(clue);
     });
   }
+  draft.pending = [];
+}
+
+/** One round: write candidates, then score them, saving progress after each step. */
+async function draftRound(grid: Grid, ai: ClueAI, requests: CrosswordClueRequest[], rules: Rules, draft: Draft, signal: AbortSignal, checkpoint: () => Promise<void>) {
+  await writeCandidates(grid, ai, requests, rules, draft, signal);
+  draft.rounds++;
+  await checkpoint();
+  await scoreCandidates(grid, ai, draft, signal);
+  await checkpoint();
 }
 
 /** An answer's best AI-written candidate that no critic doubts, for when none passed. */
@@ -275,7 +329,7 @@ function bestAvailable(pool: Scored[]): string | null {
  * attempts at this day already wrote). A first attempt works on every answer;
  * a retry only on the answers still without a usable clue.
  */
-async function writeWithAI(grid: Grid, ai: ClueAI, recent: string[][], draft: Draft): Promise<{ clues: (string | null)[]; report: string }> {
+async function writeWithAI(grid: Grid, ai: ClueAI, recent: string[][], draft: Draft, checkpoint: () => Promise<void>): Promise<{ clues: (string | null)[]; report: string }> {
   const signal = AbortSignal.timeout(WRITE_TIMEOUT_MS);
   const rules = { gridAnswers: new Set(grid.words.map((w) => w.answer)), recent, straight: straightAnswers(grid) };
   const { pools, rejected } = draft;
@@ -283,13 +337,19 @@ async function writeWithAI(grid: Grid, ai: ClueAI, recent: string[][], draft: Dr
     id: String(i), answer: grid.words[i]!.answer, straight: rules.straight[i] || undefined,
     avoid: [...recent[i]!, ...rejected[i]!.slice(-8)],
   });
+  // Candidates a restart left unscored are scored first, finishing that round.
+  if (draft.pending.length) {
+    await scoreCandidates(grid, ai, draft, signal);
+    await checkpoint();
+  }
   const needsWork = draft.failures === 0 ? (i: number) => !pools[i]!.some(passes) : (i: number) => !bestAvailable(pools[i]!);
-  // Up to three rounds; answers still short are retried, told which clues fell short.
-  for (let round = 0; round < 3 && !signal.aborted; round++) {
+  // Three rounds in all (three more on a retry); answers still short are retried, told which clues fell short.
+  const lastRound = draft.failures === 0 ? 3 : draft.rounds + 3;
+  for (let tried = 0; draft.rounds < lastRound && !signal.aborted; tried++) {
     const todo = grid.words.map((_, i) => i).filter(needsWork);
     if (!todo.length) break;
-    if (round > 0 && todo.length === grid.words.length) break; // the AI isn't answering at all
-    await draftRound(grid, ai, todo.map(request), rules, pools, rejected, signal);
+    if (tried > 0 && todo.length === grid.words.length) break; // the AI isn't answering at all
+    await draftRound(grid, ai, todo.map(request), rules, draft, signal, checkpoint);
   }
   const strict = pickClues(pools);
   const lenient = pickClues(pools, { lenient: true });
@@ -306,6 +366,26 @@ async function writeWithAI(grid: Grid, ai: ClueAI, recent: string[][], draft: Dr
   const report = `${passed} passed both critics, ${written - passed} best-available, ${grid.words.length - written} missing; `
     + `average ${avg}/15, ${aha} aha clues; patterns ${[...templates].map(([t, n]) => `${t} ${n}`).join(', ') || 'none'}`;
   return { clues, report };
+}
+
+/** Work in progress on a date's clues, saved so a restart can pick it up. */
+async function loadDraft(db: Db, date: string, signature: string, answers: number): Promise<Draft | null> {
+  const { rows } = await db.query<{ signature: string; draft: Pick<Draft, 'pools' | 'rejected' | 'pending' | 'rounds'> }>(
+    'SELECT signature, draft FROM daily_drafts WHERE date = $1', [date]);
+  const row = rows[0];
+  if (!row || row.signature !== signature) return null;
+  const { pools, rejected, pending, rounds } = row.draft;
+  if (!Array.isArray(pools) || pools.length !== answers || !Array.isArray(rejected) || rejected.length !== answers || !Array.isArray(pending)) return null;
+  return { signature, pools, rejected, pending, rounds: Number(rounds) || 0, failures: 0, retryAt: 0 };
+}
+
+function saveDraft(db: Db, date: string, draft: Draft): Promise<void> {
+  const { pools, rejected, pending, rounds } = draft;
+  return db.query(
+    `INSERT INTO daily_drafts (date, signature, draft) VALUES ($1, $2, $3)
+     ON CONFLICT (date) DO UPDATE SET signature = EXCLUDED.signature, draft = EXCLUDED.draft, updated_at = now()`,
+    [date, draft.signature, JSON.stringify({ pools, rejected, pending, rounds })],
+  ).then(() => {}, (e) => console.warn('[daily] could not save work in progress:', (e as Error).message));
 }
 
 async function load(db: Db, date: string, signature: string): Promise<string[] | null> {
@@ -371,11 +451,20 @@ export function dailyClues(date: string, grid: Grid, deps: { ai: ClueAI; db?: Db
       return clues;
     }
     const started = Date.now();
-    const draft = earlier?.signature === signature ? earlier
-      : { signature, pools: grid.words.map(() => []), rejected: grid.words.map(() => []), failures: 0, retryAt: 0 };
+    let draft = earlier?.signature === signature ? earlier : null;
+    if (!draft && deps.db) {
+      draft = await loadDraft(deps.db, date, signature, grid.words.length).catch(() => null);
+      if (draft) console.log(`[daily] ${date}: picking up the clues an earlier run started`);
+    }
+    draft ??= { signature, pools: grid.words.map(() => []), rejected: grid.words.map(() => []), pending: [], rounds: 0, failures: 0, retryAt: 0 };
     drafts.set(date, draft);
     for (const d of [...drafts.keys()].sort().slice(0, Math.max(0, drafts.size - 5))) drafts.delete(d);
-    const out = await writeWithAI(grid, deps.ai, await recentClues(deps.db, date, grid, deps.gridFor), draft);
+    const db = deps.db;
+    const current = draft;
+    const checkpoint = () => (db ? saveDraft(db, date, current) : Promise.resolve());
+    const recent = await recentClues(deps.db, date, grid, deps.gridFor);
+    keepAwake(true);
+    const out = await writeWithAI(grid, deps.ai, recent, draft, checkpoint).finally(() => keepAwake(false));
     const seconds = Math.round((Date.now() - started) / 1000);
     if (out.clues.some((c) => c === null)) {
       const wait = Math.min(RETRY_AFTER_MS * 2 ** draft.failures, RETRY_MAX_MS);
@@ -393,6 +482,8 @@ export function dailyClues(date: string, grid: Grid, deps: { ai: ClueAI; db?: Db
          ON CONFLICT (date) DO UPDATE SET signature = EXCLUDED.signature, clues = EXCLUDED.clues, created_at = now()`,
         [date, signature, JSON.stringify(clues)],
       ).catch((e) => console.warn('[daily] could not save clues:', (e as Error).message));
+      await deps.db.query(`DELETE FROM daily_drafts WHERE date = $1 OR updated_at < now() - interval '14 days'`, [date])
+        .catch((e) => console.warn('[daily] could not clear work in progress:', (e as Error).message));
     }
     remember({ signature, clues, saved: true });
     return clues;

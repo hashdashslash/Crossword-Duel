@@ -174,6 +174,73 @@ describe('daily clues', () => {
     }
   });
 
+  it('picks up after a restart instead of paying for the same clues twice', { timeout: 30_000 }, async () => {
+    const db = await embedded(null);
+    await migrate(db);
+    const date = '2026-10-08';
+    const grid = dailyGrid(date);
+    // The first server writes the candidates, then goes down while the critics are working.
+    class CutOff extends FakeWriter {
+      override reviewCrosswordClues(): Promise<never> {
+        return new Promise(() => {});
+      }
+    }
+    const first = new CutOff();
+    void dailyClues(date, grid, { ai: first, db });
+    for (let i = 0; i < 100; i++) {
+      const { rows } = await db.query<{ draft: { pending: unknown[] } }>('SELECT draft FROM daily_drafts WHERE date = $1', [date]);
+      if (rows[0]?.draft.pending.length) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(first.calls).toBeGreaterThan(0);
+
+    // A fresh server (nothing in memory) finishes the job without writing anything again.
+    vi.resetModules();
+    const fresh = await import('../server/dailyClues.js');
+    const second = new FakeWriter();
+    const clues = await fresh.dailyClues(date, grid, { ai: second, db });
+    expect(clues).toHaveLength(grid.words.length);
+    expect(second.calls).toBe(0);
+    expect(second.critiques).toBeGreaterThan(0);
+    const { rows } = await db.query('SELECT 1 FROM daily_drafts WHERE date = $1', [date]);
+    expect(rows).toHaveLength(0); // cleared once the day is saved
+    await db.close();
+  });
+
+  it('keeps the server awake on Render while it writes, and lets it sleep after', { timeout: 30_000 }, async () => {
+    const realFetch = globalThis.fetch;
+    const pings: string[] = [];
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      pings.push(String(url));
+      return new Response('{}');
+    }) as typeof fetch;
+    process.env.RENDER_EXTERNAL_URL = 'https://duel.example';
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      let finish = () => {};
+      const gate = new Promise<void>((r) => { finish = r; });
+      class Slow extends FakeWriter {
+        override async writeCrosswordClues(items: CrosswordClueRequest[]) {
+          await gate;
+          return super.writeCrosswordClues(items);
+        }
+      }
+      const date = '2026-10-09';
+      const job = dailyClues(date, dailyGrid(date), { ai: new Slow() });
+      await new Promise((r) => setTimeout(r, 50));
+      vi.advanceTimersByTime(4 * 60_000);
+      expect(pings).toEqual(['https://duel.example/api/config']);
+      finish();
+      expect(await job).not.toBeNull();
+      vi.advanceTimersByTime(10 * 60_000);
+      expect(pings).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+      globalThis.fetch = realFetch;
+      delete process.env.RENDER_EXTERNAL_URL;
+    }
+  });
+
   it('still uses AI-written clues when the critics are down', { timeout: 30_000 }, async () => {
     class NoCritics extends FakeWriter {
       override async reviewCrosswordClues(): Promise<never> {

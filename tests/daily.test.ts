@@ -98,7 +98,7 @@ describe('daily clues', () => {
     const [a, b] = await Promise.all([dailyClues('2026-10-01', grid, { ai, db }), dailyClues('2026-10-01', grid, { ai, db })]);
     expect(a).toEqual(b);
     expect(a).toHaveLength(grid.words.length);
-    expect(a[3]).toBe('Witty clue number 3');
+    expect(a![3]).toBe('Witty clue number 3');
     expect(ai.calls).toBeGreaterThan(1); // split into batches
     expect(ai.critiques).toBe(ai.calls * 2); // two critics per batch
 
@@ -109,8 +109,41 @@ describe('daily clues', () => {
     const next = new FakeWriter();
     const c = await dailyClues('2026-10-02', grid, { ai: next, db, gridFor: () => grid });
     expect(next.avoided.some((list) => list.includes('Witty clue number 3'))).toBe(true);
-    expect(c[3]).toBe('Second clue 3');
+    expect(c![3]).toBe('Second clue 3');
     await db.close();
+  });
+
+  it('never serves stand-in clues when the AI fails: the day waits and is retried', { timeout: 30_000 }, async () => {
+    class BrokenWriter extends FakeWriter {
+      override async writeCrosswordClues(): Promise<never> {
+        this.calls++;
+        throw new Error('AI unavailable');
+      }
+    }
+    const db = await embedded(null);
+    await migrate(db);
+    const ai = new BrokenWriter();
+    const res = await createDaily('2026-09-29', { ai, db }, { waitMs: 20_000 });
+    expect(res).toEqual({ pending: true });
+    const { rows } = await db.query('SELECT 1 FROM daily_clues WHERE date = $1', ['2026-09-29']);
+    expect(rows).toHaveLength(0);
+    // Asking again right away doesn't hammer the AI; the day is retried a few minutes later.
+    const calls = ai.calls;
+    expect(await createDaily('2026-09-29', { ai, db }, { waitMs: 20_000 })).toEqual({ pending: true });
+    expect(ai.calls).toBe(calls);
+    await db.close();
+  });
+
+  it('still uses AI-written clues when the critics are down', { timeout: 30_000 }, async () => {
+    class NoCritics extends FakeWriter {
+      override async reviewCrosswordClues(): Promise<never> {
+        throw new Error('critic unavailable');
+      }
+    }
+    const grid = dailyGrid('2026-10-06');
+    const clues = await dailyClues('2026-10-06', grid, { ai: new NoCritics() });
+    expect(clues).toHaveLength(grid.words.length);
+    expect(clues!.every((c) => !c.startsWith('Unscramble'))).toBe(true);
   });
 
   it('rejects candidates that break the hard rules', () => {

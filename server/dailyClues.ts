@@ -15,11 +15,14 @@
  *      clue pattern ("?" puns, "e.g." clues, fill-in-the-blanks…) is more than
  *      a tenth of the puzzle.
  *
- * Answers left without a passing clue get one more round, with the rejected
+ * Answers left without a passing clue get more rounds, with the rejected
  * clues to avoid. The day's clues are saved in the database (and kept in
- * memory) so every player sees the same ones, even after a restart. Without
- * the AI, dictionary clues fill in, and those are not saved, so the AI gets
- * another try later.
+ * memory) so every player sees the same ones, even after a restart.
+ *
+ * Players never get stand-in clues on the daily: until every answer has an
+ * AI-written clue the day isn't ready (players see "Writing and editing
+ * today's clues…"), and a failed attempt is retried a few minutes later.
+ * Only without an API key at all (local play, tests) do dictionary clues fill in.
  */
 import { createHash } from 'node:crypto';
 import { cleanClue, clueContainsAnswer } from '../shared/rules.js';
@@ -35,10 +38,8 @@ const BATCH = 20;
 const PARALLEL = 6;
 /** Give up on the AI after this long and use what passed so far. */
 const WRITE_TIMEOUT_MS = 25 * 60_000;
-/** A day's clues are only saved if the AI wrote at least this share of them. */
-const SAVE_THRESHOLD = 0.9;
-/** Retry an unsaved day (AI failed) after this long. */
-const RETRY_AFTER_MS = 10 * 60_000;
+/** After a failed attempt, wait this long before trying the day again. */
+const RETRY_AFTER_MS = 5 * 60_000;
 /** The playbook's clue length limit. */
 const MAX_CLUE = 100;
 /** Don't repeat a clue the daily used for the same answer within this many days. */
@@ -50,9 +51,11 @@ const PASS_TOTAL = 9;
 /** No clue pattern may be more than this share of the puzzle. */
 const TEMPLATE_SHARE = 0.1;
 
-interface Entry { signature: string; clues: string[]; saved: boolean; at: number }
+interface Entry { signature: string; clues: string[]; saved: boolean }
 const memory = new Map<string, Entry>();
-const inflight = new Map<string, Promise<string[]>>();
+const inflight = new Map<string, Promise<string[] | null>>();
+/** When each date's last attempt failed (so a broken AI isn't hammered). */
+const failedAt = new Map<string, number>();
 
 /** Identifies the grid, so saved clues are never used with a different grid. */
 export function gridSignature(grid: Grid): string {
@@ -255,7 +258,7 @@ async function draftRound(grid: Grid, ai: ClueAI, requests: CrosswordClueRequest
   }
 }
 
-async function writeWithAI(grid: Grid, ai: ClueAI, seed: number, recent: string[][]): Promise<{ clues: string[]; written: number; report: string }> {
+async function writeWithAI(grid: Grid, ai: ClueAI, recent: string[][]): Promise<{ clues: (string | null)[]; report: string }> {
   const signal = AbortSignal.timeout(WRITE_TIMEOUT_MS);
   const rules = { gridAnswers: new Set(grid.words.map((w) => w.answer)), recent, straight: straightAnswers(grid) };
   const pools: Scored[][] = grid.words.map(() => []);
@@ -265,23 +268,27 @@ async function writeWithAI(grid: Grid, ai: ClueAI, seed: number, recent: string[
     avoid: [...recent[i]!, ...(withRejected ? rejected[i]!.slice(-8) : [])],
   });
   await draftRound(grid, ai, grid.words.map((_, i) => request(i, false)), rules, pools, rejected, signal);
-  // One more round for answers with no passing clue, told which clues fell short.
-  const short = grid.words.map((_, i) => i).filter((i) => !pools[i]!.some(passes));
-  if (short.length && short.length < grid.words.length && !signal.aborted) {
+  // More rounds for answers with no passing clue, told which clues fell short.
+  for (let round = 0; round < 2 && !signal.aborted; round++) {
+    const short = grid.words.map((_, i) => i).filter((i) => !pools[i]!.some(passes));
+    if (!short.length || short.length === grid.words.length) break; // done, or the AI isn't answering at all
     await draftRound(grid, ai, short.map((i) => request(i, true)), rules, pools, rejected, signal);
   }
   const strict = pickClues(pools);
   const lenient = pickClues(pools, { lenient: true });
-  const clues = strict.map((c, i) => c ?? lenient[i] ?? null);
+  // Last resort for an answer the critics never passed: its best AI-written candidate.
+  const best = pools.map((pool) => [...pool].sort((a, b) => rank(b) - rank(a)).find((c) => !c.scores.some((s) => s.facts === 'unsure'))?.clue ?? null);
+  const clues = strict.map((c, i) => c ?? lenient[i] ?? best[i] ?? null);
+  const passed = strict.filter(Boolean).length;
   const written = clues.filter(Boolean).length;
   const picked = clues.flatMap((c, i) => (c ? [pools[i]!.find((p) => p.clue === c)!] : []));
   const aha = picked.filter((p) => p.scores.length === 2 && p.scores.every((s) => s.delight === 3 && s.accuracy === 3)).length;
   const templates = new Map<string, number>();
   for (const c of clues) { const t = c && clueTemplate(c); if (t) templates.set(t, (templates.get(t) ?? 0) + 1); }
   const avg = picked.length ? (picked.reduce((s, p) => s + rank(p), 0) / picked.length).toFixed(1) : '0';
-  const report = `${strict.filter(Boolean).length} passed both critics, ${written - strict.filter(Boolean).length} best-available, ${grid.words.length - written} dictionary; `
+  const report = `${passed} passed both critics, ${written - passed} best-available, ${grid.words.length - written} missing; `
     + `average ${avg}/15, ${aha} aha clues; patterns ${[...templates].map(([t, n]) => `${t} ${n}`).join(', ') || 'none'}`;
-  return { clues: clues.map((c, i) => c ?? fixedClue(grid.words[i]!.answer, seed + i)), written, report };
+  return { clues, report };
 }
 
 async function load(db: Db, date: string, signature: string): Promise<string[] | null> {
@@ -316,41 +323,54 @@ export function dailyCluesSaved(date: string): boolean {
   return memory.get(date)?.saved ?? false;
 }
 
-/** The clues for a date's grid, in the same order as `grid.words`. */
-export function dailyClues(date: string, grid: Grid, deps: { ai: ClueAI; db?: Db | null; gridFor?: (date: string) => Grid }): Promise<string[]> {
+/**
+ * The clues for a date's grid, in the same order as `grid.words`, or null if
+ * they aren't ready (being written, or the AI failed and will be retried).
+ */
+export function dailyClues(date: string, grid: Grid, deps: { ai: ClueAI; db?: Db | null; gridFor?: (date: string) => Grid }): Promise<string[] | null> {
   const signature = gridSignature(grid);
   const cached = memory.get(date);
-  if (cached && cached.signature === signature && (cached.saved || Date.now() - cached.at < RETRY_AFTER_MS)) return Promise.resolve(cached.clues);
+  if (cached && cached.signature === signature) return Promise.resolve(cached.clues);
   const running = inflight.get(date);
   if (running) return running;
+  if (Date.now() - (failedAt.get(date) ?? -Infinity) < RETRY_AFTER_MS) return Promise.resolve(null);
 
   const seed = Number.parseInt(signature.slice(0, 8), 16);
-  const job = (async () => {
+  const remember = (entry: Entry) => {
+    memory.set(date, entry);
+    for (const d of [...memory.keys()].sort().slice(0, Math.max(0, memory.size - 5))) memory.delete(d);
+  };
+  const job = (async (): Promise<string[] | null> => {
     const saved = deps.db ? await load(deps.db, date, signature).catch(() => null) : null;
     if (saved && saved.length === grid.words.length) {
-      memory.set(date, { signature, clues: saved, saved: true, at: Date.now() });
+      remember({ signature, clues: saved, saved: true });
       return saved;
     }
-    let clues: string[];
-    let keep = false;
-    if (deps.ai.mode === 'anthropic') {
-      const started = Date.now();
-      const out = await writeWithAI(grid, deps.ai, seed, await recentClues(deps.db, date, grid, deps.gridFor));
-      clues = out.clues;
-      keep = out.written >= grid.words.length * SAVE_THRESHOLD;
-      console.log(`[daily] ${date}: ${out.report}; ${Math.round((Date.now() - started) / 1000)} s${keep ? '' : ' (not saved; will retry)'}`);
-    } else {
-      clues = grid.words.map((w, i) => fixedClue(w.answer, seed + i));
+    if (deps.ai.mode !== 'anthropic') {
+      // No API key (local play and tests): dictionary clues, never saved.
+      const clues = grid.words.map((w, i) => fixedClue(w.answer, seed + i));
+      remember({ signature, clues, saved: false });
+      return clues;
     }
-    if (keep && deps.db) {
+    const started = Date.now();
+    const out = await writeWithAI(grid, deps.ai, await recentClues(deps.db, date, grid, deps.gridFor));
+    const seconds = Math.round((Date.now() - started) / 1000);
+    if (out.clues.some((c) => c === null)) {
+      failedAt.set(date, Date.now());
+      console.warn(`[daily] ${date}: not ready (${out.report}; ${seconds} s); will try again in ${RETRY_AFTER_MS / 60_000} minutes`);
+      return null;
+    }
+    const clues = out.clues as string[];
+    console.log(`[daily] ${date}: ${out.report}; ${seconds} s`);
+    failedAt.delete(date);
+    if (deps.db) {
       await deps.db.query(
         `INSERT INTO daily_clues (date, signature, clues) VALUES ($1, $2, $3)
          ON CONFLICT (date) DO UPDATE SET signature = EXCLUDED.signature, clues = EXCLUDED.clues, created_at = now()`,
         [date, signature, JSON.stringify(clues)],
       ).catch((e) => console.warn('[daily] could not save clues:', (e as Error).message));
     }
-    memory.set(date, { signature, clues, saved: keep, at: Date.now() });
-    for (const d of [...memory.keys()].sort().slice(0, Math.max(0, memory.size - 5))) memory.delete(d);
+    remember({ signature, clues, saved: true });
     return clues;
   })().finally(() => inflight.delete(date));
   inflight.set(date, job);

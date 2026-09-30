@@ -18,6 +18,7 @@ export const BLOCKED_EXACT = [
   'ASS', 'ASSES', 'ARSE', 'DICK', 'DICKS', 'COCK', 'COCKS', 'TIT', 'FAG', 'FAGS', 'HOE', 'HOES', 'JAP', 'JAPS',
   'PAKI', 'SPICK', 'HEB', 'KILL', 'KILLS', 'MURDER', 'SEX', 'SEXES', 'POO', 'POOP', 'PEE', 'PEED', 'FART',
   'FARTS', 'DAMN', 'HELL', 'BUTT', 'BUTTS', 'PUSSY', 'SCREW', 'HUMP', 'KKK', 'BRALESS', 'HUSSY', 'FLOOZY', 'FLOOZIE', 'SKANK', 'SKANKY', 'HORNY', 'ORGY', 'ORGIES', 'BOOTY', 'NOONER', 'NOONERS', 'KAFFIR', 'KAFFIRS', 'GYP', 'GYPS', 'GAY', 'GAYS', 'QUEER', 'NUT', 'NUTS',
+  'RECTAL', 'TENESMUS', 'ESTRUS', 'OESTRUS', 'ENEMA', 'ENEMAS', 'ASYSTOLE', 'SMEGMA', 'PUBIC', 'PUBES',
 ];
 
 export function isBlocked(word: string): boolean {

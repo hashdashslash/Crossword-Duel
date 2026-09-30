@@ -108,7 +108,7 @@ G. Hidden word breaks for multi-word answers (NOONE is "no one").
 H. Analogy (A : B :: C : ___) or a bracketed spoken clue.
 I. A precise, lively straight definition with a fresh angle.
 
-For each answer, write ${candidates} candidates, each using a different technique, and label each with its technique letter plus a few words (for example "B second meaning"). Include at least one precise straight clue (I or F) and, where the answer allows it, at least one misdirection (A, B or C). Answers marked STRAIGHT cross a less familiar word, so give them only fair, direct clues with no misdirection and no question mark. Don't repeat any clue listed under "avoid" for an answer.
+For each answer, write ${candidates} candidates, each using a different technique, and label each with its technique letter plus a few words (for example "B second meaning"). Include at least one precise straight clue (I or F) and, where the answer allows it, at least one misdirection (A, B or C). Answers marked STRAIGHT cross a less familiar word, so the solver needs a clear way in: no question-mark wordplay, and any misdirection must rest on a very common second meaning. Don't repeat any clue listed under "avoid" for an answer.
 
 Return every answer, using the same ids.`;
 }

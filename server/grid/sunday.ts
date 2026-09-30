@@ -612,7 +612,8 @@ const POLISH_TO = 50;
  * it and the answers around it (up to three crossings away) and refills just
  * that patch with familiar words, keeping the result only if it works.
  */
-export function polishGrid(p: Pattern, grid: Grid, rng: Rng, words: FillWord[] = loadFillWords()): Grid {
+export function polishGrid(p: Pattern, grid: Grid, rng: Rng, words: FillWord[] = loadFillWords(),
+  effort: { sizes: number[]; restarts: number; maxSteps: number } = { sizes: [24, 48], restarts: 3, maxSteps: 400 }): Grid {
   const slots = slotsOf(p);
   const score = new Map(words.map((w) => [w.word, w.score]));
   let current = grid;
@@ -625,7 +626,10 @@ export function polishGrid(p: Pattern, grid: Grid, rng: Rng, words: FillWord[] =
     if (!worst) break;
     tried.add(worst.si);
     // The worst answer must improve; the rest of the patch mustn't get worse.
-    current = refillPatch(p, slots, answers, worst.si, 24, POLISH_TO, score, rng, words, { restarts: 2, maxSteps: 200 }) ?? current;
+    for (const size of effort.sizes) {
+      const better = refillPatch(p, slots, answers, worst.si, size, POLISH_TO, score, rng, words, { restarts: effort.restarts, maxSteps: effort.maxSteps });
+      if (better) { current = better; break; }
+    }
   }
   return current;
 }
@@ -656,7 +660,7 @@ export function repairGrid(grid: Grid, rng: Rng, words: FillWord[] = loadFillWor
     }
     if (!fixed) {
       // Too tangled to patch: refill the whole grid on the same black squares.
-      const fresh = fillPattern(p, rng, {}, words.filter((w) => w.score >= 0));
+      const fresh = fillPattern(p, rng, { restarts: 5 }, words.filter((w) => w.score >= 0));
       return fresh && polishGrid(p, fresh, rng, words.filter((w) => w.score >= 0));
     }
     current = fixed;

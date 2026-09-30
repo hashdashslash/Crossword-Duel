@@ -40,6 +40,11 @@ const Define = z.object({ senses: z.array(z.object({ pos: z.string(), text: z.st
  * is anything over about 21,000 tokens.)
  */
 const STREAM_ABOVE_TOKENS = 16_000;
+/**
+ * How long a daily clue request may run before the fallback model takes over.
+ * Generous, because a request cut short is still paid for.
+ */
+const DAILY_ATTEMPT_MS = 10 * 60_000;
 
 interface Attempt {
   model: string;
@@ -116,7 +121,7 @@ export class AnthropicClueAI implements ClueAI {
         if (res.stop_reason === 'refusal') throw new AIError('the AI declined this request', false);
         if (res.stop_reason === 'max_tokens') throw new AIError('the AI reply was cut off', false);
         if (!res.parsed_output) throw new AIError(`the AI gave no usable reply (${res.stop_reason})`, false);
-        console.log(`[ai] ${label}: ok with ${attempt.model} in ${Date.now() - started} ms`);
+        console.log(`[ai] ${label}: ok with ${attempt.model} in ${Date.now() - started} ms (${res.usage.input_tokens} in, ${res.usage.output_tokens} out tokens)`);
         return res.parsed_output as z.infer<T>;
       } catch (e) {
         last = explainAIError(e, attempt.model);
@@ -184,7 +189,7 @@ export class AnthropicClueAI implements ClueAI {
     }).join('\n');
     const user = `All answers in this grid (none may appear as a word in any clue):\n${context.gridAnswers.join(' ')}\n\nWrite candidates for these answers:\n${list}`;
     const out = await this.ask('daily clues', CrosswordClues, crosswordCluesSystem(CONFIG.ai.dailyCandidates), user,
-      [{ model: CONFIG.ai.dailyClueModel, effort: 'medium', ms: 240_000 }, { model: CONFIG.ai.fallbackModel }], 32000, signal);
+      [{ model: CONFIG.ai.dailyClueModel, effort: 'medium', ms: DAILY_ATTEMPT_MS }, { model: CONFIG.ai.fallbackModel }], 32000, signal);
     return out.answers;
   }
 
@@ -192,7 +197,7 @@ export class AnthropicClueAI implements ClueAI {
     if (!items.length) return [];
     const list = items.map((i) => `id=${i.id}  ${i.answer}\n${i.clues.map((c, k) => `  ${k}. <clue>${escapeClue(c)}</clue>`).join('\n')}`).join('\n');
     const out = await this.ask(`daily clue critic ${critic + 1}`, CrosswordCritique, crosswordCritiqueSystem(critic), `Score these candidate clues:\n${list}`,
-      [{ model: CONFIG.ai.dailyClueModel, effort: 'medium', ms: 240_000 }, { model: CONFIG.ai.fallbackModel }], 32000, signal);
+      [{ model: CONFIG.ai.dailyCriticModel, effort: 'medium', ms: DAILY_ATTEMPT_MS }, { model: CONFIG.ai.fallbackModel }], 32000, signal);
     return out.answers;
   }
 
@@ -234,7 +239,8 @@ export class AnthropicClueAI implements ClueAI {
 export async function runAISelfTest(ai: AnthropicClueAI): Promise<{ ok: boolean; lines: string[] }> {
   const lines: string[] = [];
   let ok = true;
-  const models = [...new Set([CONFIG.ai.quickCheckModel, CONFIG.ai.reviewModel, CONFIG.ai.hintModel, CONFIG.ai.fallbackModel])];
+  const models = [...new Set([CONFIG.ai.quickCheckModel, CONFIG.ai.reviewModel, CONFIG.ai.hintModel, CONFIG.ai.fallbackModel,
+    CONFIG.ai.dailyClueModel, CONFIG.ai.dailyCriticModel])];
   for (const model of models) {
     try {
       await ai.client.models.retrieve(model);

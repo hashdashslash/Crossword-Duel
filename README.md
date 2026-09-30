@@ -70,7 +70,10 @@ to GitHub. The key is only ever read on the server; players' browsers never see 
 
 **Rough cost (an estimate, not measured):** a few cents for the clue review per game, plus up to a
 couple of cents per hint. The quick clue check uses the small, fast Claude Haiku 4.5 model;
-the review and hints use Claude Opus 5. You can change models in `shared/config.ts` (`ai` section).
+the review and hints use Claude Opus 5. The daily puzzle's clues are the biggest cost, roughly
+$3 a day: Claude Opus 5.5 writes six candidates per answer and two critics running on the
+cheaper Claude Sonnet 5.5 score them. Each day is written once and saved; the server log shows the
+tokens every request used. You can change models in `shared/config.ts` (`ai` section).
 
 ---
 

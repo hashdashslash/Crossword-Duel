@@ -3,7 +3,7 @@
  * (saved once per day) and the /api/daily route.
  */
 import type { AddressInfo } from 'node:net';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MockClueAI } from '../server/ai/mock.js';
 import type { ClueScore, CrosswordClueRequest, CrosswordClueReviewItem } from '../server/ai/types.js';
 import { createGameServer } from '../server/app.js';
@@ -132,6 +132,46 @@ describe('daily clues', () => {
     expect(await createDaily('2026-09-29', { ai, db }, { waitMs: 20_000 })).toEqual({ pending: true });
     expect(ai.calls).toBe(calls);
     await db.close();
+  });
+
+  it('keeps what a failed attempt wrote: the retry only asks for the missing answers, less and less often', { timeout: 30_000 }, async () => {
+    class FlakyWriter extends FakeWriter {
+      fail = true;
+      asked: string[] = [];
+      override async writeCrosswordClues(items: CrosswordClueRequest[]) {
+        this.asked.push(...items.map((i) => i.id));
+        if (this.fail && items.some((i) => i.id === '0')) throw new Error('AI busy');
+        return super.writeCrosswordClues(items);
+      }
+    }
+    const date = '2026-10-07';
+    const grid = dailyGrid(date);
+    const ai = new FlakyWriter();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      expect(await dailyClues(date, grid, { ai })).toBeNull();
+      const firstBatch = new Set(Array.from({ length: 20 }, (_, i) => String(i))); // the batch that failed
+      expect(new Set(ai.asked).size).toBe(grid.words.length);
+
+      // The second failure doubles the wait to 10 minutes.
+      vi.setSystemTime(Date.now() + 5 * 60_000 + 1000);
+      ai.asked = [];
+      expect(await dailyClues(date, grid, { ai })).toBeNull();
+      expect(new Set(ai.asked)).toEqual(firstBatch);
+      vi.setSystemTime(Date.now() + 5 * 60_000 + 1000);
+      ai.asked = [];
+      expect(await dailyClues(date, grid, { ai })).toBeNull();
+      expect(ai.asked).toEqual([]);
+
+      vi.setSystemTime(Date.now() + 5 * 60_000 + 1000);
+      ai.fail = false;
+      ai.asked = [];
+      const clues = await dailyClues(date, grid, { ai });
+      expect(clues).toHaveLength(grid.words.length);
+      expect(new Set(ai.asked)).toEqual(firstBatch); // only the answers that were missing
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('still uses AI-written clues when the critics are down', { timeout: 30_000 }, async () => {

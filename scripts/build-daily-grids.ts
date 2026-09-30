@@ -34,7 +34,7 @@ if (process.env.DAILY_WORKER_SEED) {
 } else {
   const target = Number(process.argv[2] ?? 400);
   if (!existsSync(DAILY_GRIDS_PATH)) writeFileSync(DAILY_GRIDS_PATH, HEADER);
-  const lines = () => readFileSync(DAILY_GRIDS_PATH, 'utf8').split('\n').filter((l) => l.trim() && !l.startsWith('#'));
+  const lines = () => readFileSync(DAILY_GRIDS_PATH, 'utf8').split('\n').filter((l) => l.trim() && !l.startsWith('# '));
   const have = lines();
   const seen = new Set(have);
   let count = have.length;

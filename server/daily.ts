@@ -29,7 +29,7 @@ let library: string[][] | null = null;
 /** The pre-built grids, one per line (rows joined by "/", "#" for black squares). */
 export function loadDailyGrids(): string[][] {
   library ??= readFileSync(DAILY_GRIDS_PATH, 'utf8').split('\n')
-    .filter((l) => l.trim() && !l.startsWith('#'))
+    .filter((l) => l.trim() && !l.startsWith('# '))
     .map((l) => l.trim().split('/'));
   return library;
 }

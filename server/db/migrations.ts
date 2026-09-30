@@ -67,4 +67,13 @@ export const MIGRATIONS: string[] = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   `,
+  // 5: the daily clues' work in progress, so a restart doesn't pay for them twice
+  `
+  CREATE TABLE daily_drafts (
+    date TEXT PRIMARY KEY,
+    signature TEXT NOT NULL,
+    draft JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  `,
 ];

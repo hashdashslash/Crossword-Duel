@@ -18,6 +18,7 @@ interface PracticeGame {
   grid: Grid;
   view: PuzzleView;
   startedAt: number;
+  createdAt: number;
   solvedAt?: number;
 }
 
@@ -60,13 +61,16 @@ export function toPuzzleView(id: string, grid: Grid, clueText: (answer: string, 
   };
 }
 
-/** Starts a solo game on `grid` (its timer and answer checks live on the server). */
-export function startSoloGame(grid: Grid, clueText: (answer: string, index: number) => string): PuzzleView {
+/**
+ * Starts a solo game on `grid` (its timer and answer checks live on the server).
+ * `elapsedMs` starts the timer part-way, for a solve resumed from an earlier visit.
+ */
+export function startSoloGame(grid: Grid, clueText: (answer: string, index: number) => string, elapsedMs = 0): PuzzleView {
   const now = Date.now();
-  for (const [id, g] of games) if (now - g.startedAt > MAX_AGE_MS) games.delete(id);
+  for (const [id, g] of games) if (now - g.createdAt > MAX_AGE_MS) games.delete(id);
   const id = randomUUID();
   const view = toPuzzleView(id, grid, clueText);
-  games.set(id, { grid, view, startedAt: now });
+  games.set(id, { grid, view, startedAt: now - elapsedMs, createdAt: now });
   return view;
 }
 

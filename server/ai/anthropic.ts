@@ -11,20 +11,23 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { CONFIG, type Difficulty } from '../../shared/config.js';
 import { cleanClue, clueContainsAnswer } from '../../shared/rules.js';
-import { alternativeClueSystem, escapeClue, quickCheckSystem, reviewSystem } from './prompts.js';
-import type { ClueAI, QuickCheckResult, ReviewItem, ReviewVerdict } from './types.js';
+import { alternativeClueSystem, crosswordCluesSystem, escapeClue, quickCheckSystem, reviewSystem } from './prompts.js';
+import type { ClueAI, CrosswordClueRequest, QuickCheckResult, ReviewItem, ReviewVerdict } from './types.js';
 
 const QuickCheck = z.object({ valid: z.boolean(), reason: z.string() });
 const Review = z.object({
   results: z.array(z.object({ id: z.string(), flagged: z.boolean(), explanation: z.string(), replacement: z.string() })),
 });
 const AltClue = z.object({ clue: z.string() });
+const CrosswordClues = z.object({ clues: z.array(z.object({ id: z.string(), clue: z.string() })) });
 const Define = z.object({ senses: z.array(z.object({ pos: z.string(), text: z.string() })) });
 
 interface Attempt {
   model: string;
   /** Max time for this attempt (ms); the overall signal still applies. */
   ms?: number;
+  /** Thinking effort (default low, for speed). */
+  effort?: 'low' | 'medium' | 'high';
 }
 
 /** An AI failure with a plain-English reason that is safe to show to players. */
@@ -84,7 +87,7 @@ export class AnthropicClueAI implements ClueAI {
             output_config: {
               format: zodOutputFormat(schema),
               // Haiku 4.5 doesn't support the effort setting; the others run at low effort for speed.
-              ...(attempt.model.startsWith('claude-haiku') ? {} : { effort: 'low' as const }),
+              ...(attempt.model.startsWith('claude-haiku') ? {} : { effort: attempt.effort ?? ('low' as const) }),
             },
           },
           { signal: attemptSignal },
@@ -147,6 +150,14 @@ export class AnthropicClueAI implements ClueAI {
         'For each: the part of speech (noun, verb, adjective, adverb) and a definition under 15 words.',
       `Define the English word: ${word.toLowerCase()}`, [{ model: CONFIG.ai.fallbackModel }], 400, signal);
     return out.senses.slice(0, 3).map((s) => ({ pos: s.pos.toLowerCase().slice(0, 20), text: s.text.slice(0, 200) }));
+  }
+
+  async writeCrosswordClues(items: CrosswordClueRequest[], signal: AbortSignal) {
+    if (!items.length) return [];
+    const list = items.map((i) => `id=${i.id}  ${i.answer} (${i.answer.length})`).join('\n');
+    const out = await this.ask('daily clues', CrosswordClues, crosswordCluesSystem(), `Write clues for these answers:\n${list}`,
+      [{ model: CONFIG.ai.dailyClueModel, effort: 'medium', ms: 150_000 }, { model: CONFIG.ai.fallbackModel }], 16000, signal);
+    return out.clues;
   }
 
   async alternativeClue(answer: string, avoid: string[], difficulty: Difficulty, signal: AbortSignal): Promise<string> {

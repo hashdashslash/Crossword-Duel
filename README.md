@@ -148,9 +148,24 @@ scrambled). Voted clues are saved in `data/best-clues.json` (or the folder set b
 On Render's free plan that file is wiped on every restart or update; keeping it needs a paid
 Render persistent disk mounted at `DATA_DIR`.
 
-**Daily puzzle:** one grid per day, the same for everyone, with dictionary clues. It changes at
-each player's midnight. Your times and streak are kept in your browser, and **Share** copies a
-line like "Crossword Duel Daily #12 · 4:31 · 🔥 3-day streak".
+**Daily puzzle:** a Sunday-newspaper-size crossword every day, the same for everyone: a 21×21
+grid with symmetric black squares and 120 to 140 answers. It changes at each player's midnight.
+Your times and streak are kept in your browser, as is an unfinished solve (leave and come back
+later to pick up where you stopped), and **Share** copies a line like
+"Crossword Duel Daily #12 · 48:31 · 🔥 3-day streak".
+
+- *Grids* are built ahead of time and stored in `server/grid/daily-grids.txt`, one per day
+  (filling a 21×21 grid takes far more computing than Render's free plan has). The words come
+  from `server/words/fill.txt`, a scored list built from the WordNet dictionary and the game's own
+  word lists (`npm run words:fill`); a few words are never used (`server/words/blocked.ts`).
+  To add more days, run `npm run daily:build -- 800` (it keeps going until the file has that
+  many grids, using every CPU core). If the file ever runs out, the days start over from #1.
+- *Clues* are written by the AI once per day, in the style of a Sunday newspaper crossword:
+  witty, misdirecting and original (the AI is told never to reuse published clues). They are
+  saved in the database so everyone gets the same clues, even after a restart. The server
+  writes the next day's clues in advance; if a player arrives first, they see "Writing today's
+  clues…" for a minute or two. Without an API key (or if the AI fails) the puzzle falls back to
+  dictionary clues, which are not saved, so the AI tries again later.
 
 **Dark mode** follows your device's setting.
 
@@ -188,6 +203,7 @@ The word lists are plain text files (one word per line) in `server/words/`
 | `npm run grid:demo -- hard` | Print one game's two puzzles |
 | `npm run grid:stress` | Build 1,200 grids and check every rule |
 | `npm run words:check` | Check the word lists for typos and duplicates |
+| `npm run daily:build -- 800` | Add daily-puzzle grids until there are 800 |
 | `npm run ai:check` | Check your Anthropic API key, credit and model access |
 | `npm run build` then `npm start` | Run the production version (what Render runs) |
 

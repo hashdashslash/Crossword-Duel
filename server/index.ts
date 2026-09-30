@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { runAISelfTest } from './ai/anthropic.js';
 import { createClueAI } from './ai/index.js';
 import { createGameServer, ROOT } from './app.js';
+import { prepareDailyClues } from './daily.js';
 import { openDatabase } from './db/index.js';
 
 // Local secrets (like ANTHROPIC_API_KEY) can live in a .env file, which is never uploaded to GitHub.
@@ -31,6 +32,8 @@ http.listen(port, () => {
   };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
+  // Write the daily puzzle's clues ahead of time, so nobody waits for them.
+  prepareDailyClues({ ai, db });
   if ('client' in ai) {
     // Check the key, credit and model access once at startup, so problems show in the log.
     void runAISelfTest(ai as Parameters<typeof runAISelfTest>[0]).then(({ ok, lines }) => {

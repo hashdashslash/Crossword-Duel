@@ -58,4 +58,13 @@ export const MIGRATIONS: string[] = [
   CREATE UNIQUE INDEX friendships_pair ON friendships (LEAST(requester_id, addressee_id), GREATEST(requester_id, addressee_id));
   CREATE INDEX friendships_addressee ON friendships (addressee_id);
   `,
+  // 4: the daily puzzle's AI-written clues, one row per date
+  `
+  CREATE TABLE daily_clues (
+    date TEXT PRIMARY KEY,
+    signature TEXT NOT NULL,
+    clues JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  `,
 ];

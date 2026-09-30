@@ -36,7 +36,9 @@ export const getSavedGame = (id: string) => get<SavedGame>(`/api/games/${encodeU
 export const getSharedGame = (id: string) => get<SavedGame>(`/api/results/${encodeURIComponent(id)}`);
 export const getProfile = (username: string) => get<Profile>(`/api/profile/${encodeURIComponent(username)}`);
 
-export const createDaily = (date: string) => post<{ puzzle: PuzzleView; number: number; date: string }>('/api/daily', { date });
+export type DailyStart = { puzzle: PuzzleView; number: number; date: string } | { pending: true };
+/** Starts the day's puzzle. `pending` means its clues are still being written; ask again shortly. */
+export const createDaily = (date: string, resumeMs?: number) => post<DailyStart>('/api/daily', { date, resumeMs });
 
 export const createPractice = (difficulty: Difficulty) => post<PuzzleView>('/api/practice', { difficulty });
 

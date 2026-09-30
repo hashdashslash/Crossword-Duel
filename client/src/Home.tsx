@@ -132,7 +132,7 @@ function DailyCard() {
     <button className="panel daily-card" onClick={() => navigate('/daily')}>
       <span>
         <strong>Daily puzzle #{dailyNumber(today)}</strong>
-        <span className="muted small-print">{done ? 'Solved today ✓' : 'One crossword a day, the same for everyone'}</span>
+        <span className="muted small-print">{done ? 'Solved today ✓' : 'A Sunday-size crossword, the same for everyone'}</span>
       </span>
       <span aria-hidden className="daily-arrow">→</span>
     </button>

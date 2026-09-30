@@ -10,7 +10,8 @@ import { createGameServer } from '../server/app.js';
 import { createDaily, dailyGrid, loadDailyGrids } from '../server/daily.js';
 import { acceptClue, candidateProblem, clueTemplate, dailyClues, pickClues, type Scored } from '../server/dailyClues.js';
 import { embedded, migrate } from '../server/db/index.js';
-import { gridFromRows } from '../server/grid/sunday.js';
+import { createRng } from '../server/grid/rng.js';
+import { gridFromRows, loadFillWords, repairGrid } from '../server/grid/sunday.js';
 import { validateSundayGrid } from '../server/grid/sundayCheck.js';
 
 const good: ClueScore = { accuracy: 3, fairness: 3, freshness: 2, surface: 3, delight: 2, facts: 'none' };
@@ -56,6 +57,18 @@ describe('daily grid library', () => {
       const grid = gridFromRows(rows);
       expect(validateSundayGrid(grid)).toEqual([]);
     }
+  });
+
+  it('swaps a newly banned word out of a grid', { timeout: 60_000 }, () => {
+    const grid = dailyGrid('2026-10-03');
+    const banned = grid.words.find((w) => w.answer.length === 5)!.answer;
+    const words = loadFillWords().filter((w) => w.word !== banned);
+    const allowed = new Set(words.map((w) => w.word));
+    let repaired = null;
+    for (let seed = 1; !repaired && seed <= 4; seed++) repaired = repairGrid(grid, createRng(seed), words);
+    expect(repaired).not.toBeNull();
+    expect(repaired!.words.every((w) => allowed.has(w.answer))).toBe(true);
+    expect(repaired!.cells.map((r) => r.map((c) => c === null))).toEqual(grid.cells.map((r) => r.map((c) => c === null)));
   });
 
   it('numbers answers across then down, like a newspaper', () => {

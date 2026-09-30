@@ -111,7 +111,8 @@ for (const word of dictionary) {
   if (base.has(word) || word.length < 4) continue;
   let best = 0;
   for (const { stem, needs } of stems(word)) {
-    if (stem.length >= 3 && needs.some((pos) => partsOfSpeech.get(stem)?.has(pos))) best = Math.max(best, base.get(stem) ?? 0);
+    // Two-letter stems only for -S forms (DOES, GOES); ON + ST is not ONST.
+    if ((stem.length >= 3 || needs.includes('noun')) && needs.some((pos) => partsOfSpeech.get(stem)?.has(pos))) best = Math.max(best, base.get(stem) ?? 0);
   }
   if (best >= 60) offer(word, best - 10);
 }

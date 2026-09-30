@@ -633,12 +633,17 @@ export function polishGrid(p: Pattern, grid: Grid, rng: Rng, words: FillWord[] =
 /**
  * Replaces every answer that is no longer in `words` (say, a word newly
  * marked as crosswordese), refilling a patch around each, widening the patch
- * if needed. Returns null if some answer can't be replaced.
+ * if needed, or refilling the whole grid on the same black squares. Returns
+ * null if even that fails.
  */
 export function repairGrid(grid: Grid, rng: Rng, words: FillWord[] = loadFillWords()): Grid | null {
   const p: Pattern = grid.cells.map((r) => r.map((c) => c === null));
   const slots = slotsOf(p);
   const score = new Map(words.map((w) => [w.word, w.score]));
+  // The banned answers still sit in the grid outside each patch, so the filler
+  // must know them; a negative score keeps them out of every refilled slot.
+  const banned = [...new Set(answersOf(p, slots, grid).filter((a) => !score.has(a)))];
+  words = [...words, ...banned.map((word) => ({ word, score: -1 }))];
   let current = grid;
   for (;;) {
     const answers = answersOf(p, slots, current);
@@ -646,10 +651,14 @@ export function repairGrid(grid: Grid, rng: Rng, words: FillWord[] = loadFillWor
     if (bad < 0) return current;
     let fixed: Grid | null = null;
     for (const size of [24, 40, 64]) {
-      fixed = refillPatch(p, slots, answers, bad, size, 0, score, rng, words, { restarts: 3, maxSteps: 400 });
+      fixed = refillPatch(p, slots, answers, bad, size, 0, score, rng, words, { restarts: 3, maxSteps: 400, minScore: -1 });
       if (fixed) break;
     }
-    if (!fixed) return null;
+    if (!fixed) {
+      // Too tangled to patch: refill the whole grid on the same black squares.
+      const fresh = fillPattern(p, rng, {}, words.filter((w) => w.score >= 0));
+      return fresh && polishGrid(p, fresh, rng, words.filter((w) => w.score >= 0));
+    }
     current = fixed;
   }
 }

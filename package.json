@@ -16,7 +16,8 @@
     "ai:check": "tsx scripts/ai-check.ts",
     "words:define": "tsx scripts/build-definitions.ts",
     "words:fill": "tsx scripts/build-fill-words.ts",
-    "daily:build": "tsx scripts/build-daily-grids.ts"
+    "daily:build": "tsx scripts/build-daily-grids.ts",
+    "daily:repair": "tsx scripts/repair-daily-grids.ts"
   },
   "engines": {
     "node": ">=20.12"

@@ -612,35 +612,83 @@ const POLISH_TO = 50;
  * it and the answers around it (up to three crossings away) and refills just
  * that patch with familiar words, keeping the result only if it works.
  */
-export function polishGrid(p: Pattern, grid: Grid, rng: Rng, words: FillWord[] = loadFillWords()): Grid {
+export function polishGrid(p: Pattern, grid: Grid, rng: Rng, words: FillWord[] = loadFillWords(),
+  effort: { sizes: number[]; restarts: number; maxSteps: number } = { sizes: [24, 48], restarts: 3, maxSteps: 400 }): Grid {
   const slots = slotsOf(p);
   const score = new Map(words.map((w) => [w.word, w.score]));
-  const n = p.length;
-  const answerOf = (g: Grid, s: Slot) => s.cells.map((c) => g.cells[Math.floor(c / n)]![c % n]).join('');
   let current = grid;
   const tried = new Set<number>();
   for (let round = 0; round < 80; round++) {
-    const answers = slots.map((s) => answerOf(current, s));
+    const answers = answersOf(p, slots, current);
     const worst = answers.map((a, si) => ({ si, sc: score.get(a) ?? 0 }))
       .filter((x) => x.sc < POLISH_BELOW && !tried.has(x.si))
       .sort((a, b) => a.sc - b.sc)[0];
     if (!worst) break;
     tried.add(worst.si);
-    // The patch: this answer, its crossings, theirs, and so on.
-    const patch = new Set([worst.si]);
-    let frontier = [worst.si];
-    for (let d = 0; d < 3 && patch.size < 24; d++) {
-      const next: number[] = [];
-      for (const si of frontier) for (const x of slots[si]!.cross) if (!patch.has(x) && patch.size < 24) { patch.add(x); next.push(x); }
-      frontier = next;
-    }
-    const fixed = answers.map((a, si) => (patch.has(si) ? null : a));
     // The worst answer must improve; the rest of the patch mustn't get worse.
-    const slotMinScore = answers.map((a, si) => (si === worst.si ? POLISH_TO : Math.min(POLISH_TO, score.get(a) ?? 0)));
-    const better = fillPattern(p, rng, { fixed, slotMinScore, restarts: 2, maxSteps: 200 }, words);
-    if (better) current = better;
+    for (const size of effort.sizes) {
+      const better = refillPatch(p, slots, answers, worst.si, size, POLISH_TO, score, rng, words, { restarts: effort.restarts, maxSteps: effort.maxSteps });
+      if (better) { current = better; break; }
+    }
   }
   return current;
+}
+
+/**
+ * Replaces every answer that is no longer in `words` (say, a word newly
+ * marked as crosswordese), refilling a patch around each, widening the patch
+ * if needed, or refilling the whole grid on the same black squares. Returns
+ * null if even that fails.
+ */
+export function repairGrid(grid: Grid, rng: Rng, words: FillWord[] = loadFillWords()): Grid | null {
+  const p: Pattern = grid.cells.map((r) => r.map((c) => c === null));
+  const slots = slotsOf(p);
+  const score = new Map(words.map((w) => [w.word, w.score]));
+  // The banned answers still sit in the grid outside each patch, so the filler
+  // must know them; a negative score keeps them out of every refilled slot.
+  const banned = [...new Set(answersOf(p, slots, grid).filter((a) => !score.has(a)))];
+  words = [...words, ...banned.map((word) => ({ word, score: -1 }))];
+  let current = grid;
+  for (;;) {
+    const answers = answersOf(p, slots, current);
+    const bad = answers.findIndex((a) => !score.has(a));
+    if (bad < 0) return current;
+    let fixed: Grid | null = null;
+    for (const size of [24, 40, 64]) {
+      fixed = refillPatch(p, slots, answers, bad, size, 0, score, rng, words, { restarts: 3, maxSteps: 400, minScore: -1 });
+      if (fixed) break;
+    }
+    if (!fixed) {
+      // Too tangled to patch: refill the whole grid on the same black squares.
+      const fresh = fillPattern(p, rng, { restarts: 5 }, words.filter((w) => w.score >= 0));
+      return fresh && polishGrid(p, fresh, rng, words.filter((w) => w.score >= 0));
+    }
+    current = fixed;
+  }
+}
+
+function answersOf(p: Pattern, slots: Slot[], g: Grid): string[] {
+  const n = p.length;
+  return slots.map((s) => s.cells.map((c) => g.cells[Math.floor(c / n)]![c % n]).join(''));
+}
+
+/**
+ * Clears answer `center` and the answers around it (crossings, theirs, and so
+ * on, up to `size` answers) and refills just that patch. The center answer
+ * must score at least `centerMin`; the rest of the patch mustn't get worse.
+ */
+function refillPatch(p: Pattern, slots: Slot[], answers: string[], center: number, size: number, centerMin: number,
+  score: Map<string, number>, rng: Rng, words: FillWord[], opts: Partial<FillOptions>): Grid | null {
+  const patch = new Set([center]);
+  let frontier = [center];
+  while (frontier.length && patch.size < size) {
+    const next: number[] = [];
+    for (const si of frontier) for (const x of slots[si]!.cross) if (!patch.has(x) && patch.size < size) { patch.add(x); next.push(x); }
+    frontier = next;
+  }
+  const fixed = answers.map((a, si) => (patch.has(si) ? null : a));
+  const slotMinScore = answers.map((a, si) => (si === center ? centerMin : Math.min(POLISH_TO, score.get(a) ?? 0)));
+  return fillPattern(p, rng, { ...opts, fixed, slotMinScore }, words);
 }
 
 /**

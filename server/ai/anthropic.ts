@@ -11,15 +11,27 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { CONFIG, type Difficulty } from '../../shared/config.js';
 import { cleanClue, clueContainsAnswer } from '../../shared/rules.js';
-import { alternativeClueSystem, crosswordCluesSystem, escapeClue, quickCheckSystem, reviewSystem } from './prompts.js';
-import type { ClueAI, CrosswordClueRequest, QuickCheckResult, ReviewItem, ReviewVerdict } from './types.js';
+import { alternativeClueSystem, crosswordCluesSystem, crosswordCritiqueSystem, escapeClue, quickCheckSystem, reviewSystem } from './prompts.js';
+import type { ClueAI, CrosswordClueContext, CrosswordClueRequest, CrosswordClueReviewItem, QuickCheckResult, ReviewItem, ReviewVerdict } from './types.js';
 
 const QuickCheck = z.object({ valid: z.boolean(), reason: z.string() });
 const Review = z.object({
   results: z.array(z.object({ id: z.string(), flagged: z.boolean(), explanation: z.string(), replacement: z.string() })),
 });
 const AltClue = z.object({ clue: z.string() });
-const CrosswordClues = z.object({ clues: z.array(z.object({ id: z.string(), clue: z.string() })) });
+const CrosswordClues = z.object({
+  answers: z.array(z.object({ id: z.string(), candidates: z.array(z.object({ technique: z.string(), clue: z.string() })) })),
+});
+const Score = z.number().int().min(0).max(3);
+const CrosswordCritique = z.object({
+  answers: z.array(z.object({
+    id: z.string(),
+    scores: z.array(z.object({
+      index: z.number().int(), accuracy: Score, fairness: Score, freshness: Score, surface: Score, delight: Score,
+      facts: z.enum(['none', 'sure', 'unsure']),
+    })),
+  })),
+});
 const Define = z.object({ senses: z.array(z.object({ pos: z.string(), text: z.string() })) });
 
 interface Attempt {
@@ -152,12 +164,24 @@ export class AnthropicClueAI implements ClueAI {
     return out.senses.slice(0, 3).map((s) => ({ pos: s.pos.toLowerCase().slice(0, 20), text: s.text.slice(0, 200) }));
   }
 
-  async writeCrosswordClues(items: CrosswordClueRequest[], signal: AbortSignal) {
+  async writeCrosswordClues(items: CrosswordClueRequest[], context: CrosswordClueContext, signal: AbortSignal) {
     if (!items.length) return [];
-    const list = items.map((i) => `id=${i.id}  ${i.answer} (${i.answer.length})`).join('\n');
-    const out = await this.ask('daily clues', CrosswordClues, crosswordCluesSystem(), `Write clues for these answers:\n${list}`,
-      [{ model: CONFIG.ai.dailyClueModel, effort: 'medium', ms: 150_000 }, { model: CONFIG.ai.fallbackModel }], 16000, signal);
-    return out.clues;
+    const list = items.map((i) => {
+      const avoid = i.avoid?.length ? `  avoid: ${i.avoid.map((c) => `<clue>${escapeClue(c)}</clue>`).join(' ')}` : '';
+      return `id=${i.id}  ${i.answer} (${i.answer.length})${i.straight ? '  STRAIGHT' : ''}${avoid}`;
+    }).join('\n');
+    const user = `All answers in this grid (none may appear as a word in any clue):\n${context.gridAnswers.join(' ')}\n\nWrite candidates for these answers:\n${list}`;
+    const out = await this.ask('daily clues', CrosswordClues, crosswordCluesSystem(CONFIG.ai.dailyCandidates), user,
+      [{ model: CONFIG.ai.dailyClueModel, effort: 'medium', ms: 240_000 }, { model: CONFIG.ai.fallbackModel }], 32000, signal);
+    return out.answers;
+  }
+
+  async reviewCrosswordClues(items: CrosswordClueReviewItem[], critic: 0 | 1, signal: AbortSignal) {
+    if (!items.length) return [];
+    const list = items.map((i) => `id=${i.id}  ${i.answer}\n${i.clues.map((c, k) => `  ${k}. <clue>${escapeClue(c)}</clue>`).join('\n')}`).join('\n');
+    const out = await this.ask(`daily clue critic ${critic + 1}`, CrosswordCritique, crosswordCritiqueSystem(critic), `Score these candidate clues:\n${list}`,
+      [{ model: CONFIG.ai.dailyClueModel, effort: 'medium', ms: 240_000 }, { model: CONFIG.ai.fallbackModel }], 32000, signal);
+    return out.answers;
   }
 
   async alternativeClue(answer: string, avoid: string[], difficulty: Difficulty, signal: AbortSignal): Promise<string> {

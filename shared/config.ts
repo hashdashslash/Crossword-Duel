@@ -42,6 +42,8 @@ export const CONFIG = {
     fallbackModel: 'claude-haiku-4-5',
     /** Model that writes the daily puzzle's clues (once per day, cached). */
     dailyClueModel: 'claude-opus-5',
+    /** Candidate clues the AI writes per daily answer; two critic passes pick the best. */
+    dailyCandidates: 6,
     /** How long the main model gets before switching to the fallback model (ms). */
     reviewPrimaryMs: 10000,
     hintPrimaryMs: 6000,

@@ -172,7 +172,7 @@ later to pick up where you stopped), and **Share** copies a line like
   keeping any one pattern ("?" puns, fill-in-the-blanks, "e.g." clues) to a tenth of the puzzle.
   The clues are saved in the database so everyone gets the same clues, even after a restart. The server
   writes the next day's clues in advance; if a player arrives first, they see "Writing today's
-  clues…" for a few minutes. Without an API key (or if the AI fails) the puzzle falls back to
+  clues…" for several minutes. Without an API key (or if the AI fails) the puzzle falls back to
   dictionary clues, which are not saved, so the AI tries again later.
 
 **Dark mode** follows your device's setting.

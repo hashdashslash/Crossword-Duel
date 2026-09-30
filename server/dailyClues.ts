@@ -31,8 +31,10 @@ import { fixedClue } from './practice.js';
 
 /** Answers per AI request. Smaller batches finish faster and run side by side. */
 const BATCH = 20;
+/** AI requests running at once (keeps clear of rate limits). */
+const PARALLEL = 6;
 /** Give up on the AI after this long and use what passed so far. */
-const WRITE_TIMEOUT_MS = 12 * 60_000;
+const WRITE_TIMEOUT_MS = 25 * 60_000;
 /** A day's clues are only saved if the AI wrote at least this share of them. */
 const SAVE_THRESHOLD = 0.9;
 /** Retry an unsaved day (AI failed) after this long. */
@@ -192,6 +194,14 @@ export function pickClues(pools: Scored[][], opts: { lenient?: boolean } = {}): 
   return choice.map((c, i) => (c >= 0 ? ok[i]![c]!.clue : null));
 }
 
+/** Runs the tasks, at most PARALLEL at a time. */
+async function limited(tasks: (() => Promise<void>)[]): Promise<void> {
+  const queue = [...tasks];
+  await Promise.all(Array.from({ length: Math.min(PARALLEL, queue.length) }, async () => {
+    for (let task = queue.shift(); task; task = queue.shift()) await task();
+  }));
+}
+
 function batches<T>(items: T[]): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += BATCH) out.push(items.slice(i, i + BATCH));
@@ -203,7 +213,7 @@ async function draftRound(grid: Grid, ai: ClueAI, requests: CrosswordClueRequest
   pools: Scored[][], rejected: string[][], signal: AbortSignal) {
   const gridAnswers = [...rules.gridAnswers];
   const fresh = new Map<number, string[]>();
-  await Promise.all(batches(requests).map(async (batch) => {
+  await limited(batches(requests).map((batch) => async () => {
     try {
       for (const { id, candidates } of await ai.writeCrosswordClues(batch, { gridAnswers }, signal)) {
         const i = Number(id);
@@ -224,7 +234,7 @@ async function draftRound(grid: Grid, ai: ClueAI, requests: CrosswordClueRequest
   }));
   const items = [...fresh].filter(([, clues]) => clues.length).map(([i, clues]) => ({ id: String(i), answer: grid.words[i]!.answer, clues }));
   const scores = new Map<number, (ClueScore | undefined)[][]>(items.map((it) => [Number(it.id), it.clues.map(() => [undefined, undefined])]));
-  await Promise.all(([0, 1] as const).flatMap((critic) => batches(items).map(async (batch) => {
+  await limited(([0, 1] as const).flatMap((critic) => batches(items).map((batch) => async () => {
     try {
       for (const { id, scores: list } of await ai.reviewCrosswordClues(batch, critic, signal)) {
         const slots = scores.get(Number(id));

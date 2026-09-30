@@ -56,10 +56,10 @@ export function Daily() {
       const [daily] = await Promise.all([
         (async () => {
           // The clues are written once a day; if they're not ready yet, wait for them.
-          for (let tries = 0; tries < 40; tries++) {
+          for (let tries = 0; tries < 80; tries++) {
             const res = await createDaily(today, saved?.elapsedMs);
             if (!('pending' in res)) return res;
-            setScreen({ name: 'loading', text: "Writing today's clues… this can take a minute or two." });
+            setScreen({ name: 'loading', text: "Writing and editing today's clues… this can take several minutes." });
             await sleep(3000);
           }
           throw new Error("Today's clues are taking longer than usual. Please try again in a few minutes.");

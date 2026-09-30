@@ -65,7 +65,6 @@ export function escapeClue(text: string): string {
   return text.replace(/</g, '‹').replace(/>/g, '›');
 }
 
-/** Instructions for writing the daily (Sunday-size) puzzle's clues. */
 /**
  * The daily puzzle's clue voice and rules, distilled from the project's
  * crossword playbook (plans/daily-crossword-playbook.md in the project files):
@@ -128,7 +127,7 @@ Score every clue on five criteria, each 0 to 3:
 - fairness: 0 unsolvable without niche knowledge, or misdirection whose hidden meaning is obscure; 3 inferable, or famous and fair.
 - freshness: 0 a stock clue, a well-known published clue, or crossword clue-speak; 3 a new angle.
 - surface: 0 awkward or unnatural; 3 reads like natural English.
-- delight: 0 a flat dictionary definition; 3 a misdirection, laugh or learnable fact that clicks.
+- delight: 0 lifeless (a stock dictionary definition like "Feline pet"); 1 a plain but crisp definition; 3 a misdirection, laugh or learnable fact that clicks.
 Also set facts: "none" if the clue relies on no fact beyond word meaning, "sure" if it relies on facts you are certain are true, "unsure" if any fact might be wrong or out of date.
 
 Be tough: most first drafts don't deserve 3s. Return a score for every clue of every answer, with index matching the clue's position (starting at 0), and the same ids.`;

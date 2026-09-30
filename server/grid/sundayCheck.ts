@@ -6,6 +6,8 @@ import { isBlocked } from '../words/blocked.js';
 import { loadFillWords, runsOf, SUNDAY, type Pattern } from './sunday.js';
 import type { Grid } from './types.js';
 
+let known: Set<string> | null = null;
+
 export function validateSundayGrid(grid: Grid, opts = SUNDAY): string[] {
   const errors: string[] = [];
   const n = opts.size;
@@ -46,7 +48,7 @@ export function validateSundayGrid(grid: Grid, opts = SUNDAY): string[] {
   }
   if (seen.size !== whites.length) errors.push('the white squares are not all connected');
 
-  const known = new Set(loadFillWords().map((w) => w.word));
+  known ??= new Set(loadFillWords().map((w) => w.word));
   const answers = grid.words.map((w) => w.answer);
   if (new Set(answers).size !== answers.length) errors.push('an answer appears twice');
   for (const a of answers) {

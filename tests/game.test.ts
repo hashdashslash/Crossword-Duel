@@ -25,7 +25,7 @@ const cfg = CONFIG as unknown as { minBuildingScreenMs: number; reconnectWindowS
 cfg.minBuildingScreenMs = 0;
 
 let url = '';
-const server = createGameServer({ ai: new MockClueAI() });
+const server = createGameServer({ ai: new MockClueAI(), dailyPuzzle: true }); // the daily is switched off in the game, but its code stays tested
 const clients: Client[] = [];
 
 beforeAll(async () => {

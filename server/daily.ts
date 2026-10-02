@@ -10,6 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CONFIG } from '../shared/config.js';
 import { DAILY_START, dailyNumber } from '../shared/daily.js';
 import type { PuzzleView } from '../shared/puzzle.js';
 import type { ClueAI } from './ai/types.js';
@@ -103,7 +104,7 @@ const addDays = (date: string, days: number) => new Date(Date.parse(`${date}T00:
  * also makes sure the days players could be on right now are ready.
  */
 export function prepareDailyClues(deps: { ai: ClueAI; db?: Db | null }) {
-  if (deps.ai.mode !== 'anthropic') return;
+  if (!CONFIG.dailyPuzzle || deps.ai.mode !== 'anthropic') return;
   const prepare = async (dates: string[]): Promise<boolean> => {
     let allSaved = true;
     for (const date of dates) {

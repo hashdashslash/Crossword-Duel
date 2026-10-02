@@ -70,9 +70,9 @@ to GitHub. The key is only ever read on the server; players' browsers never see 
 
 **Rough cost (an estimate, not measured):** a few cents for the clue review per game, plus up to a
 couple of cents per hint. The quick clue check uses the small, fast Claude Haiku 4.5 model;
-the review and hints use Claude Opus 5. The daily puzzle's clues are the biggest cost, roughly
-$3 a day: Claude Opus 5.5 writes six candidates per answer and two critics running on the
-cheaper Claude Sonnet 5.5 score them. Each day is written once and saved; the server log shows the
+the review and hints use Claude Opus 5. The daily puzzle (switched off for now, see below) is
+the biggest cost when it's on, about $2 a day: Claude Opus 5.5 writes six candidates per answer
+and two critics running on the cheaper Claude Sonnet 5.5 score them. Each day is written once and saved; the server log shows the
 tokens every request used. You can change models in `shared/config.ts` (`ai` section).
 
 ---
@@ -151,7 +151,11 @@ scrambled). Voted clues are saved in `data/best-clues.json` (or the folder set b
 On Render's free plan that file is wiped on every restart or update; keeping it needs a paid
 Render persistent disk mounted at `DATA_DIR`.
 
-**Daily puzzle:** a Sunday-newspaper-size crossword every day, the same for everyone: a 21×21
+**Daily puzzle (switched off for now):** to save AI costs the daily is turned off with
+`dailyPuzzle: false` in `shared/config.ts`. It isn't on the home page, `/daily` links go to the
+home page, and the server writes no daily clues. Set it to `true` to bring everything below back.
+
+A Sunday-newspaper-size crossword every day, the same for everyone: a 21×21
 grid with symmetric black squares and 120 to 140 answers. It changes at each player's midnight.
 Your times and streak are kept in your browser, as is an unfinished solve (leave and come back
 later to pick up where you stopped), and **Share** copies a line like

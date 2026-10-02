@@ -114,7 +114,7 @@ export function Home() {
 
         {error && <p className="message center">{error}</p>}
 
-        <DailyCard />
+        {CONFIG.dailyPuzzle && <DailyCard />}
 
         <div className="home-links">
           <button className="link" onClick={() => navigate('/practice')}>Practice solo</button>

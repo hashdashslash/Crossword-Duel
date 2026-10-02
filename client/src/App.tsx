@@ -1,3 +1,4 @@
+import { CONFIG } from '../../shared/config';
 import { GamePage } from './game/GamePage';
 import { Home } from './Home';
 import { usePath } from './lib/router';
@@ -20,7 +21,7 @@ function page(path: string) {
   const game = path.match(/^\/g\/([A-Za-z]{4})\/?$/);
   if (game) return <GamePage key={game[1]!.toUpperCase()} code={game[1]!.toUpperCase()} />;
   if (path.startsWith('/practice')) return <Practice />;
-  if (path.startsWith('/daily')) return <Daily />;
+  if (path.startsWith('/daily') && CONFIG.dailyPuzzle) return <Daily />;
   if (path === '/history') return <HistoryPage />;
   if (path === '/friends') return <FriendsPage />;
   const review = path.match(/^\/games\/([\w-]+)\/?$/);

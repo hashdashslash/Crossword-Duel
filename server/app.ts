@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
-import { DIFFICULTIES, type Difficulty } from '../shared/config.js';
+import { CONFIG, DIFFICULTIES, type Difficulty } from '../shared/config.js';
 import type { ClientToServerEvents, ServerToClientEvents } from '../shared/protocol.js';
 import type { ClueAI } from './ai/types.js';
 import { Accounts, attachAuthRoutes } from './accounts/accounts.js';
@@ -25,7 +25,7 @@ export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  */
 export const BOOT_ID = randomUUID();
 
-export function createGameServer(opts: { ai: ClueAI; db?: Db | null }) {
+export function createGameServer(opts: { ai: ClueAI; db?: Db | null; dailyPuzzle?: boolean }) {
   const app = express();
   // Render sits behind one proxy; this makes req.ip the player's address (for rate limits).
   app.set('trust proxy', 1);
@@ -57,6 +57,10 @@ export function createGameServer(opts: { ai: ClueAI; db?: Db | null }) {
   });
 
   app.post('/api/daily', async (req, res) => {
+    if (!(opts.dailyPuzzle ?? CONFIG.dailyPuzzle)) {
+      res.status(404).json({ error: 'The daily puzzle is switched off.' });
+      return;
+    }
     try {
       const daily = await createDaily(req.body?.date, opts, { resumeMs: req.body?.resumeMs });
       if ('error' in daily) {

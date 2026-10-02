@@ -4,10 +4,11 @@
  */
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { CONFIG } from '../shared/config.js';
 import { MockClueAI } from '../server/ai/mock.js';
 import type { ClueScore, CrosswordClueRequest, CrosswordClueReviewItem } from '../server/ai/types.js';
 import { createGameServer } from '../server/app.js';
-import { createDaily, dailyGrid, loadDailyGrids, pacificClock } from '../server/daily.js';
+import { createDaily, dailyGrid, loadDailyGrids, pacificClock, prepareDailyClues } from '../server/daily.js';
 import { acceptClue, candidateProblem, clueTemplate, dailyClues, pickClues, type Scored } from '../server/dailyClues.js';
 import { embedded, migrate } from '../server/db/index.js';
 import { createRng } from '../server/grid/rng.js';
@@ -297,8 +298,30 @@ describe('daily clues', () => {
   });
 });
 
+describe('daily puzzle switched off', () => {
+  it('writes no clues and the API says it is off', async () => {
+    expect(CONFIG.dailyPuzzle).toBe(false);
+    const ai = new FakeWriter();
+    prepareDailyClues({ ai });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(ai.calls).toBe(0);
+
+    const server = createGameServer({ ai: new MockClueAI() });
+    await new Promise<void>((r) => server.http.listen(0, r));
+    try {
+      const res = await fetch(`http://localhost:${(server.http.address() as AddressInfo).port}/api/daily`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: '2026-09-30' }),
+      });
+      expect(res.status).toBe(404);
+    } finally {
+      server.io.close();
+      server.http.close();
+    }
+  });
+});
+
 describe('/api/daily', () => {
-  const server = createGameServer({ ai: new MockClueAI() });
+  const server = createGameServer({ ai: new MockClueAI(), dailyPuzzle: true });
   let url = '';
   beforeAll(async () => {
     await new Promise<void>((r) => server.http.listen(0, r));

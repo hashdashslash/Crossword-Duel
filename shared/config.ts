@@ -30,6 +30,14 @@ export const CONFIG = {
   /** The "Building your puzzles…" screen shows for at least this long. */
   minBuildingScreenMs: 2500,
 
+  // ── Daily puzzle ──────────────────────────────────────────
+  /**
+   * The Sunday-size daily puzzle. Switched off for now to save AI costs: it's
+   * not on the home page, /daily links go to the home page, and the server
+   * writes no daily clues. Set to true to bring it all back; the code is kept.
+   */
+  dailyPuzzle: false as boolean,
+
   // ── AI ────────────────────────────────────────────────────
   ai: {
     /** Fast model for the live clue warning (needs ~1–2 s). */
